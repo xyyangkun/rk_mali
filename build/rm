@@ -1,0 +1,1 @@
+rm -rf CMakeCache.txt  CMakeFiles  cmake_install.cmake  Makefile  osee_test  rkisp_demo rkisp_demo_1080P rkisp_demo_out1080P rknn_model test opencl  opengl  osee_mali  raw2rgb.py

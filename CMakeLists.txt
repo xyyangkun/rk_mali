@@ -1,0 +1,52 @@
+# CMake 最低版本号要求
+cmake_minimum_required (VERSION 2.8)
+set(CMAKE_CXX_STANDARD 11)
+# 项目信息
+project (osee_mali)
+# 指定生成目标
+
+# 指定安装路径
+#install (TARGETS osee_mali DESTINATION bin)
+
+
+# 指定生成目标
+add_executable(osee_mali mali_test.c)
+
+set(BUILDROOT_BUILD_PROJECT true)
+
+#/data/works/rk3568/rk356x-linux-20210809/external/osee_mail/build$ /data/works/rk3568/rk356x-linux-20210809/prebuilts/gcc/linux-x86/aarch64/gcc-linaro-6.3.1-2017.05-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-g++ ../test/HelloWorld.cpp  -I ../../libmali/include/ -L ../../libmali/lib/aarch64-linux-gnu/ -lmali-bifrost-g52-g2p0-wayland
+
+set(PLATFORM_NAME rk3568)
+
+# 依赖库
+# 指定生成目标
+include_directories(
+	${PROJECT_SOURCE_DIR}/include/
+)
+
+
+get_filename_component(ABSOLUTE_PATH1 ${PROJECT_SOURCE_DIR}/../../buildroot/output/rockchip_${PLATFORM_NAME}/host/aarch64-buildroot-linux-gnu/sysroot/lib ABSOLUTE) 
+get_filename_component(ABSOLUTE_PATH2 ${PROJECT_SOURCE_DIR}/../../buildroot/output/rockchip_${PLATFORM_NAME}/host/aarch64-buildroot-linux-gnu/sysroot/usr/lib ABSOLUTE) 
+
+link_directories(
+	#${PROJECT_SOURCE_DIR}/../libmali/lib/aarch64-linux-gnu
+	#${PROJECT_SOURCE_DIR}/../../buildroot/target/lib
+	#${PROJECT_SOURCE_DIR}/../../buildroot/output/rockchip_rk3568/host/usr/lib
+	#${PROJECT_SOURCE_DIR}/../../buildroot/output/rockchip_rk3568/host/lib
+	${PROJECT_SOURCE_DIR}/libs/
+
+)
+
+
+#set(OPENCL_LIBRARIES mali-bifrost-g52-g2p0 )
+#set(OPENCL_LIBRARIES mali-bifrost-g52-g2p0-gbm)
+#set(OPENCL_LIBRARIES mali-bifrost-g52-r25p0-dummy)
+#set(OPENCL_LIBRARIES mali-bifrost-g52-g2p0-wayland)
+#set(OPENCL_LIBRARIES mali-bifrost-g52-g2p0-wayland drm wayland-client wayland-server m c)
+#set(OPENCL_LIBRARIES mali drm wayland-client wayland-server m c)
+set(OPENCL_LIBRARIES mali-bifrost-g52-g2p0-dummy)
+
+
+
+add_subdirectory(opencl)
+add_subdirectory(opengl)
