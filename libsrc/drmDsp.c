@@ -74,6 +74,10 @@ int initDrmDsp(int out_type) {
 
       // yk debug
       if(i==0)break;
+	  //
+      //if(i==2)break;
+      //if(i==3)break;
+      //if(i==1)break;
 
     }
   }
@@ -255,7 +259,8 @@ static int arm_camera_yuv420_scale_arm(char *srcbuf, char *dstbuf,int src_w, int
 
 // 初始化显示内存
 // out_type 0 hdmi_out 1 mipi_out
-int init_display_mem(int dispWidth, int dispHeight, int out_type){
+// buf_type 0 yuv  1 rgb888
+int init_display_mem(int dispWidth, int dispHeight, int out_type, int buf_type){
 	int ret;
 	//int fmt = DRM_FORMAT_NV12;
 	struct drm_mode_create_dumb cd;
@@ -280,6 +285,7 @@ int init_display_mem(int dispWidth, int dispHeight, int out_type){
 	//create bo
 	if (!pDrmDsp->bo[0]) {
 		printf("@@@@@@@@@@@@@@@@@@@%s:bo widthxheight:%dx%d\n", __func__, wAlign16, hAlign16);
+		if(buf_type == 0) {
 #ifdef DRM_YUV422
 		// nv16 yuv422
 		pDrmDsp->bo[0] = create_sp_bo(pDrmDsp->dev, wAlign16, hAlign16,
@@ -302,6 +308,23 @@ int init_display_mem(int dispWidth, int dispHeight, int out_type){
 		}
 
 #endif
+		}
+		else {
+			// rgb8888
+		pDrmDsp->bo[0] = create_sp_bo(pDrmDsp->dev, wAlign16, hAlign16,
+				32, 32, DRM_FORMAT_XRGB8888, 0);
+				//32, 24, DRM_FORMAT_RGB888, 0);
+				//32, 32, DRM_FORMAT_XRGB8888, 0);
+		pDrmDsp->bo[1] = create_sp_bo(pDrmDsp->dev, wAlign16, hAlign16,
+				32, 32, DRM_FORMAT_XRGB8888, 0);
+				//32, 24, DRM_FORMAT_RGB888, 0);
+				//32, 32, DRM_FORMAT_XRGB8888, 0);
+		if (!pDrmDsp->bo[0] || !pDrmDsp->bo[1]) {
+			printf("%s:create bo failed ! \n", __func__);
+			return -1;
+		}
+
+		}
 		pDrmDsp->nextbo = pDrmDsp->bo[0];
 	}
 
@@ -312,24 +335,22 @@ int init_display_mem(int dispWidth, int dispHeight, int out_type){
 
 	bo = pDrmDsp->nextbo;
 
-#if 0
+	if(buf_type == 0){
+		// yuv420 or 422
 	handles[0] = bo->handle;
 	pitches[0] = wAlign16;
 	offsets[0] = 0;
 	handles[1] = bo->handle;
 	pitches[1] = wAlign16;
 	offsets[1] = wAlign16 * hAlign16;
-#else
+	}
+	else {
 	handles[0] = bo->handle;
-	pitches[0] = wAlign16;
-	offsets[0] = 0;
+	pitches[0] = wAlign16*4;
 
-	handles[1] = bo->handle;
-	pitches[1] = wAlign16;
-	offsets[1] = wAlign16 * hAlign16;
 
-	//handles[2] = bo->handle;
-#endif
+	}
+
 
 	// 感觉这些代码只需要运行一次就好
 	ret = drmModeAddFB2(bo->dev->fd, bo->width, bo->height,

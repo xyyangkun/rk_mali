@@ -33,10 +33,7 @@
 
 static void _display(void *ptr, int fd, int fmt, int w, int h, int rotation) {
 
-	// printf("display:\n");
 	print_fps("usb recv");
-	//drmDspFrame(w, h, w, h, ptr, DRM_FORMAT_NV12);
-	//display_fush();
 }
 
 static void copy_buffer(void *src_p, int src_w, int src_h, int src_fmt,
@@ -65,11 +62,18 @@ static void _video_cb(void *ptr, int buf_type){
 	int h = 1088;
 	int _fd; 
 	void *_ptr;
-
 	display_get_mem(&_ptr, &_fd); 
-	// 竖屏需要旋转
+#if 1
 	copy_buffer(ptr, 1920, 1088, RK_FORMAT_YCbCr_422_SP, 
-				_ptr, 1080, 1920, RK_FORMAT_YCbCr_422_SP, HAL_TRANSFORM_ROT_90); 
+				_ptr, 1920, 1080, RK_FORMAT_BGRA_8888, 0); 
+				//_ptr, 1920, 1080, RK_FORMAT_RGBX_8888, 0); 
+				//_ptr, 1920, 1080, RK_FORMAT_BGR_888, 0); 
+#else
+	memset(_ptr, 0xff, 1920*1080);
+	memset(_ptr+1920*1080, 0x1f, 1920*1080);
+	memset(_ptr+1920*1080*2, 0xff, 1920*1080);
+	memset(_ptr+1920*1080*3, 0xff, 1920*1080);
+#endif
 #endif
 }
 
@@ -80,13 +84,13 @@ int main() {
 	int height = 1080;
 
 #ifdef  DRMDISPLAY
-	// mipi
-	int out_type = 1;
+	// hdmi
+	int out_type = 0;
 
 	initDrmDsp(out_type);
 
-	// mipi 是竖屏1080x1920
-	init_display_mem(height, width, out_type, 0);
+	// hdmi 是横屏 正常的1920x1080
+	init_display_mem(width, height, out_type, 1);
 #endif
 	// 设置usb参数
 	set_usb_param(width, height, _display);

@@ -69,7 +69,7 @@ static void _video_cb(void *ptr, int buf_type){
 	display_get_mem(&_ptr, &_fd); 
 	// 竖屏需要旋转
 	copy_buffer(ptr, 1920, 1088, RK_FORMAT_YCbCr_422_SP, 
-				_ptr, 1080, 1920, RK_FORMAT_YCbCr_422_SP, HAL_TRANSFORM_ROT_90); 
+				_ptr, 1080, 1920, RK_FORMAT_BGRA_8888, HAL_TRANSFORM_ROT_90); 
 #endif
 }
 
@@ -86,7 +86,7 @@ int main() {
 	initDrmDsp(out_type);
 
 	// mipi 是竖屏1080x1920
-	init_display_mem(height, width, out_type, 0);
+	init_display_mem(height, width, out_type, 1);
 #endif
 	// 设置usb参数
 	set_usb_param(width, height, _display);

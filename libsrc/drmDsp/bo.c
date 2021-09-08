@@ -149,7 +149,7 @@ struct sp_bo* create_sp_bo(struct sp_dev* dev, uint32_t width, uint32_t height,
   }
 
   // yk debug 
-  memset(bo->map_addr, 0xff/2 ,1920*1080*2);
+  memset(bo->map_addr, 0xff/2 ,bo->size);
 
   return bo;
 

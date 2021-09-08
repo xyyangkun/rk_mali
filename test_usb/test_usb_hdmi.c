@@ -81,7 +81,7 @@ int main() {
 	initDrmDsp(out_type);
 
 	// hdmi 是横屏 正常的1920x1080
-	init_display_mem(width, height, out_type);
+	init_display_mem(width, height, out_type, 0);
 #endif
 	// 设置usb参数
 	set_usb_param(width, height, _display);

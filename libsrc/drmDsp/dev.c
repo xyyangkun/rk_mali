@@ -58,7 +58,15 @@ static int get_supported_format(struct sp_plane* plane, uint32_t* format) {
 	else if(plane->plane->formats[i] == DRM_FORMAT_ARGB8888)
 		printf("DRM_FORMAT_ARGB8888\n");
 	else if(plane->plane->formats[i] == DRM_FORMAT_RGBA8888)
-		printf("DRM_FORMAT_RGBA8888");
+		printf("DRM_FORMAT_RGBA8888\n");
+	else if(plane->plane->formats[i] == DRM_FORMAT_RGBX8888)
+		printf("DRM_FORMAT_RGBX8888\n");
+	else if(plane->plane->formats[i] == DRM_FORMAT_BGRX8888)
+		printf("DRM_FORMAT_BGRX8888\n");
+	else if(plane->plane->formats[i] == DRM_FORMAT_XBGR8888)
+		printf("DRM_FORMAT_XBGR8888\n");
+	else if(plane->plane->formats[i] == DRM_FORMAT_RGBA8888)
+		printf("DRM_FORMAT_RGBA8888\n");
 	else if(plane->plane->formats[i] == DRM_FORMAT_RGB888)
 		printf("DRM_FORMAT_RGB888\n");
 	else if(plane->plane->formats[i] ==DRM_FORMAT_BGR888)
@@ -71,10 +79,18 @@ static int get_supported_format(struct sp_plane* plane, uint32_t* format) {
 		printf("DRM_FORMAT_ARGB1555\n");
 	else if(plane->plane->formats[i]  == DRM_FORMAT_XRGB1555)
 		printf("DRM_FORMAT_XRGB1555\n");
-	else if(plane->plane->formats[i]  == DRM_FORMAT_NV16)
-		printf("DRM_FORMAT_NV16\n");
 	else if(plane->plane->formats[i]  == DRM_FORMAT_NV12)
 		printf("DRM_FORMAT_NV12\n");
+	else if(plane->plane->formats[i]  == DRM_FORMAT_NV21)
+		printf("DRM_FORMAT_NV21\n");
+	else if(plane->plane->formats[i]  == DRM_FORMAT_NV24)
+		printf("DRM_FORMAT_NV24\n");
+	else if(plane->plane->formats[i]  == DRM_FORMAT_NV42)
+		printf("DRM_FORMAT_NV42\n");
+	else if(plane->plane->formats[i]  == DRM_FORMAT_NV16)
+		printf("DRM_FORMAT_NV16\n");
+	else if(plane->plane->formats[i]  == DRM_FORMAT_NV61)
+		printf("DRM_FORMAT_NV61\n");
 	else if(plane->plane->formats[i]  == DRM_FORMAT_BGR565)
 	{
 		printf("DRM_FORMAT_BGR565\n");
