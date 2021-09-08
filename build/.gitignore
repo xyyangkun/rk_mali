@@ -1,0 +1,10 @@
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+drmout/
+opencl/
+opengl/
+osee_mali
+test_usb/
+

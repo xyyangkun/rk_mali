@@ -12,6 +12,11 @@ SET(CMAKE_CXX_COMPILER  "/data/works/rk3568/rk356x-linux-20210809/prebuilts/gcc/
 #SET(CMAKE_SYSTEM_PROCESSOR "armv7-a_hardfp")
 SET(CMAKE_SYSTEM_PROCESSOR "armv8-a")
 
+set(SYSROOT_PATH  /data/works/rk3568/rk356x-linux-20210809/buildroot/output/rockchip_rk3568/host/aarch64-buildroot-linux-gnu/sysroot)
+
+set(CMAKE_SYSROOT "${SYSROOT_PATH}")
+set(CMAKE_SYSROOT "${SYSROOT_PATH}")
+
 add_definitions(-fPIC)
 add_definitions(-DARMLINUX)
 add_definitions(-D__gnu_linux__)

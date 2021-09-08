@@ -35,6 +35,8 @@ link_directories(
 	#${PROJECT_SOURCE_DIR}/../../buildroot/output/rockchip_rk3568/host/lib
 	${PROJECT_SOURCE_DIR}/libs/
 
+	#${ABSOLUTE_PATH1}
+	#${ABSOLUTE_PATH2}
 )
 
 
@@ -50,3 +52,5 @@ set(OPENCL_LIBRARIES mali-bifrost-g52-g2p0-dummy)
 
 add_subdirectory(opencl)
 add_subdirectory(opengl)
+add_subdirectory(test_usb)
+add_subdirectory(drmout)
