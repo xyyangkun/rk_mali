@@ -21,7 +21,8 @@ if [ $? -eq 127 ];then
 fi
 
 # generate Makefile
-cmake -DCMAKE_BUILD_TYPE=Release \
+#cmake -DCMAKE_BUILD_TYPE=Release \
+cmake -DCMAKE_BUILD_TYPE=Debug \
       -DCMAKE_TOOLCHAIN_FILE=./arm.linux.cross.cmake \
       -DRKPLATFORM=ON \
       -DLOCALBUILD=ON \

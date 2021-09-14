@@ -28,3 +28,6 @@ target_link_libraries(test_usb_mipi_rgb8888_out rga drm pthread z v4l2 v4l2rds  
 
 add_executable(test_usb_hdmi_rgb8888_out test_usb_hdmi_rgb8888_out.c my_usb_camera.c  ringqueue.c ${_DIR_SRCS})
 target_link_libraries(test_usb_hdmi_rgb8888_out rga drm pthread z v4l2 v4l2rds  rockchip_mpp -lm)
+
+add_executable(modeset-plane-rotate modeset-plane-rotate.c )
+target_link_libraries(modeset-plane-rotate rga drm pthread z v4l2 v4l2rds  rockchip_mpp -lm)

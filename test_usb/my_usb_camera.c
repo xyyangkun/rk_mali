@@ -336,6 +336,7 @@ static int open_usb_camera(void)
         fd = open(name, O_RDWR, 0);
         if (fd < 0)
             continue;
+		printf("usb device:/dev/video%d\n", i);
         if (!querycap(fd, "usb")) {
             printf("%s: %s\n", __func__, name);
             return fd;
