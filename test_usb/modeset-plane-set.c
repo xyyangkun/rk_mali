@@ -270,8 +270,6 @@ void set_plane_property(int fd, int plane_id,struct property_arg *p)
 	int ret;
 	int i;
 
-
-
 	props = drmModeObjectGetProperties(fd, plane_id,
 				DRM_MODE_OBJECT_PLANE);
 	
@@ -306,44 +304,10 @@ void set_plane_property(int fd, int plane_id,struct property_arg *p)
     }
 }
 
-
-void set_rotation(int fd, int plane_id,int value)
-{
-	struct property_arg prop;
-	
-
-    if(value !=1 && value !=2 && value !=4 && value !=8)
-        return;
-    
-	memset(&prop, 0, sizeof(prop));
-	prop.obj_type = 0;
-	prop.name[DRM_PROP_NAME_LEN] = '\0';
-	prop.obj_id = plane_id;
-	memcpy(prop.name,"rotation",sizeof("rotation"));
-	prop.value = value; //rotate-0=0x1 rotate-90=0x2 rotate-180=0x4 rotate-270=0x8, modetest -p can show the details
-	set_plane_property(fd,plane_id,&prop);
-
-}
-
-void set_bitmask(int fd, int plane_id,int value)
-{
-	struct property_arg prop;
-	
-	memset(&prop, 0, sizeof(prop));
-	prop.obj_type = 106;
-	prop.name[DRM_PROP_NAME_LEN] = '\0';
-	prop.obj_id = plane_id;
-	//memcpy(prop.name,"FEATURE",sizeof("FEATURE"));
-	prop.value = value; 
-	set_plane_property(fd,plane_id,&prop);
-
-}
-
 //the alpha is globle setting,e.g. HEO alpha is 255, but still cant cover over1,2
 void set_alpha(int fd, int plane_id,int value)
 {
 	struct property_arg prop;
-	
 
 	memset(&prop, 0, sizeof(prop));
 	prop.obj_type = 0;
@@ -351,6 +315,19 @@ void set_alpha(int fd, int plane_id,int value)
 	prop.obj_id = plane_id;
 	memcpy(prop.name,"alpha",sizeof("alpha"));
 	prop.value = value; //0~255
+	set_plane_property(fd,plane_id,&prop);
+}
+
+void set_rotate(int fd, int plane_id,int value)
+{
+	struct property_arg prop;
+	
+	memset(&prop, 0, sizeof(prop));
+	prop.obj_type = 0;
+	prop.name[DRM_PROP_NAME_LEN] = '\0';
+	prop.obj_id = plane_id;
+	memcpy(prop.name,"rotation",sizeof("rotation"));
+	prop.value = value; //otate-0=0x1 rotate-90=0x2 rotate-270=0x8 reflect-x=0x10 reflect-y=0x20
 	set_plane_property(fd,plane_id,&prop);
 
 }
@@ -415,6 +392,19 @@ void set_blend(int fd, int plane_id,int value)
 
 }
 
+void usage(char *name) {
+	printf("zpos value [0-7]\n");
+	printf("alpha value [0-65535]\n");
+	printf("plane_index [0-7]\n");
+	printf("rotate value:rotate-0=0x1 rotate-90=0x2 "
+			"rotate-270=0x8 reflect-x=0x10 reflect-y=0x20");
+	printf("%s setzpos  plane_index value   eg: %s setzpos  [0-7] [0 7] \n"
+		   "%s setalpha  plane_index value  eg: %s setalpna 0-7]  [0 0xaffff]\n",
+		   "%s setrotate plane_index value  eg: %s setrotate [0-7]  [0 0x20]\n",
+		   name, name,
+		   name, name,
+		   name, name);
+}
 
 int main(int argc, char **argv)
 {
@@ -432,8 +422,8 @@ int main(int argc, char **argv)
 	fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
 
 	res = drmModeGetResources(fd);
-	crtc_id = res->crtcs[0];
-	conn_id = res->connectors[0];
+	crtc_id = res->crtcs[1];
+	conn_id = res->connectors[1];
 
 #if 0
 	ret = drmSetClientCap(fd, DRM_CLIENT_CAP_ATOMIC, 1);
@@ -455,11 +445,10 @@ int main(int argc, char **argv)
 	}
 #endif
 
-
 	plane_res = drmModeGetPlaneResources(fd);
 	plane_id = plane_res->planes[0];
 	
-	printf("get plane count %d,plane_id %d\n",plane_res->count_planes,plane_id);
+	printf("get plane conn_id:%d  crtc_id:%d count %d,plane_id %d\n", conn_id, crtc_id, plane_res->count_planes,plane_id);
 
 	for(int i = 0; i< plane_res->count_planes; i++) {
 		printf("index:%d plane_id:%d\n", i, plane_res->planes[i]);
@@ -474,60 +463,61 @@ int main(int argc, char **argv)
 	printf("count_encoders:%d, connector_id:%d, encoder_id:%d\n",
 			conn->count_encoders, conn->connector_id, conn->encoder_id);
 
-	printf("get connector count_modes:%d  nanme %s,hdisplay %d, vdisplay %d,vrefresh %d\n",
-			conn->count_modes, conn->modes[0].name,conn->modes[0].vdisplay,\
+	printf("get connector nanme %s,hdisplay %d, vdisplay %d,vrefresh %d\n",conn->modes[0].name,conn->modes[0].vdisplay,\
 		conn->modes[0].hdisplay,conn->modes[0].vrefresh);
 
-	// yk 20210914
-	/*
-	modeset_create_fb(fd, &buf);
-	drmModeSetCrtc(fd, crtc_id, buf.fb_id,0, 0, &conn_id, 1, &conn->modes[0]);
-	//write_color(&buf,0xff00ff00);
-	write_color(&buf,0xffffffff);
+	if(argc == 0 || argc != 4) {
+		usage(argv[0]);
+		goto out;
+	}
 
-	int x1= 0;
-	int y1=0;
-	printf("w:%d h:%d\n", buf.width, buf.height);
-    ret = drmModeSetPlane(fd, plane_res->planes[0], crtc_id, buf.fb_id, 0,
-            x1, y1, buf.width, buf.height,
-            0<<16, 0<<16, 
-            (buf.width) << 16, (buf.height) << 16);
-	//*/
+	int plane_index = atoi(argv[2]);
+	// int value = atoi(argv[3]);
+	int value = (int)strtol(argv[3], NULL, 0);
 
-	printf("buff pri_index id:%d, plane_id:%d\n",  buf.fb_id, plane_res->planes[0]);
+	int *cmd[] = {"setzpos", "setalpha", "setrotate"};
 
-#if 1
+	printf("cmd choice:%s\n", argv[1]);
+	printf("plane_index:%d\n", plane_index);
+	printf("set value:%d ==> %#X\n", value, value);
+
+	if(0 == memcmp(argv[1], cmd[0], strlen(cmd[0]))) {
+		printf("set zpos\n");
+		set_zpos(fd,plane_res->planes[plane_index],value);
+		printf("set zpos over\n");
+
+	} else if (0 == memcmp(argv[1], cmd[1], strlen(cmd[1]))) {
+		printf("set alpha\n");
+		set_alpha(fd,plane_res->planes[plane_index],value);
+	} else if (0 == memcmp(argv[1], cmd[2], strlen(cmd[2]))) {
+		printf("set alpha\n");
+		set_rotate(fd,plane_res->planes[plane_index],value);
+	}
+	else {
+		usage(argv[0]);
+		goto out;
+	}
+
+
+
+
+#if 0
 
 //int index = 4;
-// int index = 0;
-int index = 3;
+int index = 0;
 // int index = 2;
 
-	// -------------------  HEO	
-	plane_buf[index].width = 200;
-	plane_buf[index].height = 200;
+	   
 
-	plane_buf[index].width = 800;
-	plane_buf[index].height = 800;
-
-	modeset_create_fb(fd, &plane_buf[index]);
-	// write_color_half(&plane_buf[index],0x000000ff,0x00000000);
-	write_color3(&plane_buf[index],0xff0000ff,0xff00ff00, 0xffff0000); // 最高位ff为alpha通道
-
-
-
-	printf("====>buff index %d id:%d, pane_id:%d\n", index, plane_buf[index].fb_id, plane_res->planes[index]);
-        
-
-    // set_blend(fd,plane_res->planes[index],2);
+    //set_blend(fd,plane_res->planes[index],0);
     //set_type(fd,plane_res->planes[index],0);
 	
     //set_alpha(fd,plane_res->planes[index],0xfff0);
     //set_alpha(fd,plane_res->planes[index],0xffff);
-    //set_alpha(fd,plane_res->planes[index],0xafff);
-    set_alpha(fd,plane_res->planes[index],0x0);
+    set_alpha(fd,plane_res->planes[index],0xafff);
+    //set_alpha(fd,plane_res->planes[index],0x0);
 
-    //set_colorkey(fd,plane_res->planes[index],0x7fffffff);
+    set_colorkey(fd,plane_res->planes[index],0x7fffffff);
     //set_colorkey(fd,plane_res->planes[index],0x00ff0000);
     //set_colorkey(fd,plane_res->planes[index],0x0000ff00);
     //set_colorkey(fd,plane_res->planes[index],0x000000ff);
@@ -544,51 +534,12 @@ int index = 3;
     set_zpos(fd,plane_res->planes[index],0x7);
 
 	
-	x = 100;
-	y = 100;
-	//set_alpha(fd,plane_res->planes[index],255);
-    ret = drmModeSetPlane(fd, plane_res->planes[index], crtc_id, plane_buf[index].fb_id, 0,
-            x, y, plane_buf[index].width,plane_buf[index].height,
-            0<<16, 0<<16, 
-            (plane_buf[index].width) << 16, (plane_buf[index].height) << 16);
-    if(ret < 0)
-        printf("drmModeSetPlane err %d\n",ret);		
-        
-        
-    //set_alpha(fd,plane_res->planes[index],255);
-
-        set_rotation(fd,plane_res->planes[index], 0x1);
-		//set_bitmask(fd,plane_res->planes[index], 0x1);
 #endif
 
-    rotation = 0x0;
-
-
-	while(1){
-
-		// only plane_id = 99 127 can rotation
-
-	//printf("============>yk debug %d:%d\n", __LINE__, rotation);
-		
-		usleep(1000000);
-		
-		//set_alpha(fd,plane_res->planes[index],alpha++);
-		//if(alpha >= 255)
-		//	alpha = 10;
-        //
-  /* 
-        set_rotation(fd,plane_res->planes[index],rotation);
-        
-        rotation = rotation*2; //rotation is 1,2,4,8
-        if(rotation > 8)
-            rotation = 1;
-			*/
-
-	}
+	printf("will out\n");
 	
-	
+out:
 
-	modeset_destroy_fb(fd, &buf);
 
 	drmModeFreeConnector(conn);
 	drmModeFreePlaneResources(plane_res);

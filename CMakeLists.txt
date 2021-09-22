@@ -22,6 +22,9 @@ set(PLATFORM_NAME rk3568)
 # 指定生成目标
 include_directories(
 	${PROJECT_SOURCE_DIR}/include/
+	${PROJECT_SOURCE_DIR}/../../buildroot/output/rockchip_${PLATFORM_NAME}/host/aarch64-buildroot-linux-gnu/sysroot/usr/include
+	${PROJECT_SOURCE_DIR}/../../buildroot/output/rockchip_${PLATFORM_NAME}/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/easymedia/
+	${PROJECT_SOURCE_DIR}/../../buildroot/output/rockchip_${PLATFORM_NAME}/build/rkmedia/include/rkmedia/
 )
 
 
@@ -34,6 +37,7 @@ link_directories(
 	#${PROJECT_SOURCE_DIR}/../../buildroot/output/rockchip_rk3568/host/usr/lib
 	#${PROJECT_SOURCE_DIR}/../../buildroot/output/rockchip_rk3568/host/lib
 	${PROJECT_SOURCE_DIR}/libs/
+	${PROJECT_SOURCE_DIR}/../../buildroot/output/rockchip_${PLATFORM_NAME}/host/aarch64-buildroot-linux-gnu/sysroot/usr/lib
 
 	#${ABSOLUTE_PATH1}
 	#${ABSOLUTE_PATH2}

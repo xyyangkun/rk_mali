@@ -6,9 +6,10 @@
 #include <xf86drmMode.h>
 #include <drm_fourcc.h>
 
-#include "modeset.h"
 #include "bo.h"
 #include "dev.h"
+
+#include "modeset.h"
 
 int initialize_screens(struct sp_dev* dev) {
   int ret, i, j;

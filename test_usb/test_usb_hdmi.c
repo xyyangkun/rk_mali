@@ -63,8 +63,8 @@ static void _video_cb(void *ptr, int buf_type){
 	int _fd; 
 	void *_ptr;
 	display_get_mem(&_ptr, &_fd); 
-	copy_buffer(ptr, 1920, 1088, RK_FORMAT_YCbCr_422_SP, 
-				_ptr, 1920, 1088, RK_FORMAT_YCbCr_422_SP, 0); 
+	copy_buffer(ptr, 1920, 1080, RK_FORMAT_YCbCr_422_SP, 
+				_ptr, 1920, 1080, RK_FORMAT_YCbCr_422_SP, 0); 
 #endif
 }
 
@@ -81,7 +81,7 @@ int main() {
 	initDrmDsp(out_type);
 
 	// hdmi 是横屏 正常的1920x1080
-	init_display_mem(width, height, out_type, 0);
+	init_display_mem(1920, 1080, out_type, 0);
 #endif
 	// 设置usb参数
 	set_usb_param(width, height, _display);

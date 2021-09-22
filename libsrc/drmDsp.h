@@ -19,6 +19,8 @@ int display_get_mem(void **ptr, int *fd);
 void display_fush();
 int init_display_mem(int dispWidth, int dispHeight, int out_type, int buf_type);
 
+int display_get_fd();
+
 #ifdef __cplusplus
 }
 #endif

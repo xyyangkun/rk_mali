@@ -68,8 +68,13 @@ static void _video_cb(void *ptr, int buf_type){
 
 	display_get_mem(&_ptr, &_fd); 
 	// 竖屏需要旋转
+#if 1
 	copy_buffer(ptr, 1920, 1088, RK_FORMAT_YCbCr_422_SP, 
 				_ptr, 1080, 1920, RK_FORMAT_YCbCr_422_SP, HAL_TRANSFORM_ROT_90); 
+#else
+	copy_buffer(ptr, 1920, 1088, RK_FORMAT_YCbCr_422_SP, 
+				_ptr, 1920, 1080, RK_FORMAT_YCbCr_422_SP, 0); 
+#endif
 #endif
 }
 
@@ -87,6 +92,7 @@ int main() {
 
 	// mipi 是竖屏1080x1920
 	init_display_mem(height, width, out_type, 0);
+	//init_display_mem(width, height, out_type, 0);
 #endif
 	// 设置usb参数
 	set_usb_param(width, height, _display);

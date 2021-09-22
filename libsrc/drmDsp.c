@@ -29,6 +29,11 @@ struct drmDsp {
   struct sp_bo* nextbo;
 } gDrmDsp;
 
+int display_get_fd() {
+	return gDrmDsp.dev->fd;
+}
+
+
 // out_type 0 hdmi  1mipi for rk3568
 int initDrmDsp(int out_type) {
   int ret = 0, i = 0;

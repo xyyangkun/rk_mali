@@ -14,7 +14,7 @@
 #include "dev.h"
 #include "modeset.h"
 
-#if 0//def USE_ATOMIC_API
+#if 1//def USE_ATOMIC_API
 static uint32_t get_prop_id(struct sp_dev* dev,
                             drmModeObjectPropertiesPtr props, const char* name) {
   drmModePropertyPtr p;
@@ -118,7 +118,6 @@ static int get_supported_format(struct sp_plane* plane, uint32_t* format) {
   printf("No suitable formats found!\n");
   return -ENOENT;
 }
-
 struct sp_dev* create_sp_dev(void) {
   struct sp_dev* dev;
   int ret, fd, i, j;
@@ -249,7 +248,7 @@ struct sp_dev* create_sp_dev(void) {
       printf("failed to get plane properties\n");
       goto err;
     }
-#if 0//def USE_ATOMIC_API
+#if 1//def USE_ATOMIC_API
     plane->crtc_pid = get_prop_id(dev, props, "CRTC_ID");
     if (!plane->crtc_pid) {
       drmModeFreeObjectProperties(props);
