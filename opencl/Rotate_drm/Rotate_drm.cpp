@@ -16,14 +16,13 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-#include <assert.h>
-#include <sys/time.h>
 
 #ifdef __APPLE__
 #include <OpenCL/cl.h>
 #else
 #include <CL/cl.h>
 #endif
+
 
 #define DRM
 
@@ -32,9 +31,13 @@
 //  https://www.khronos.org/registry/OpenCL/extensions/arm/cl_arm_import_memory.txt
 #include "rkmedia_api.h"
 #include "CL/cl_ext.h"
-#include "unistd.h"
+#include <assert.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 #endif
+
+
 
 ///
 //  Constants
@@ -47,13 +50,9 @@
 // 这个程序使用opencl在1920x1080的(20, 20)位置上叠加一个720x576的数据
 const int w1 = 1920;
 const int h1 = 1080;
-const int w2 = 1280;
-const int h2 = 720;
-const int x = 20;
-const int y = 20;
 const int BIG_SIZE = w1*h1*3/2;
-const int LIT_SIZE = w2*h2*3/2;
 
+static struct timeval t_new, t_old;
 ///
 //  Create an OpenCL context on the first available platform using
 //  either a GPU or CPU depending on what is available.
@@ -204,19 +203,18 @@ cl_program CreateProgram(cl_context context, cl_device_id device, const char* fi
 //  and b (input)
 //
 bool CreateMemObjects(cl_context context, cl_mem memObjects[2],
-                      unsigned char *src1, unsigned char *src2)
+                      unsigned char *src1, unsigned char *dst)
 {
     memObjects[0] = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
                                    sizeof(unsigned char) * BIG_SIZE, src1, NULL);
-    memObjects[1] = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                                   sizeof(unsigned char) * LIT_SIZE, src2, NULL);
+    memObjects[1] = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
+                                   sizeof(unsigned char) * BIG_SIZE, dst, NULL);
 
     if (memObjects[0] == NULL || memObjects[1] == NULL)
     {
         std::cerr << "Error creating memory objects." << std::endl;
         return false;
     }
-
 
     return true;
 }
@@ -237,6 +235,7 @@ void Cleanup(cl_context context, cl_command_queue commandQueue,
     if (commandQueue != 0)
         clReleaseCommandQueue(commandQueue);
 
+
     if (kernel[0] != 0)
         clReleaseKernel(kernel[0]);
     if (kernel[1] != 0)
@@ -256,21 +255,14 @@ void Cleanup(cl_context context, cl_command_queue commandQueue,
 int main(int argc, char** argv)
 {
 	const char *in1 = "1080_nv12.yuv";
-	const char *in2 = "720p_nv12.yuv";
-	const char *out = "1920x1080_nv12_out.yuv";
+	const char *out = "1080x1920_nv12_out.yuv";
 	if(argc == 3) {
 		in1 = argv[1];
-		in2 = argv[2];
+		out = argv[2];
 	}
 
     FILE *in1_fp = fopen(in1 , "rb");
     if(!in1_fp) {
-        printf("ERROR to open infile\n");
-        return -1;
-    }
-
-    FILE *in2_fp = fopen(in2 , "rb");
-    if(!in2_fp) {
         printf("ERROR to open infile\n");
         return -1;
     }
@@ -297,7 +289,7 @@ int main(int argc, char** argv)
         std::cerr << "Failed to create OpenCL context." << std::endl;
         return 1;
     }
-#if 1
+
     // Create a command-queue on the first device available
     // on the created context
     commandQueue = CreateCommandQueue(context, &device);
@@ -306,10 +298,9 @@ int main(int argc, char** argv)
         Cleanup(context, commandQueue, program, kernel, memObjects);
         return 1;
     }
-#endif
 
     // Create OpenCL program from HelloWorld.cl kernel source
-    program = CreateProgram(context, device, "Blend_drm.cl");
+    program = CreateProgram(context, device, "Rotate_drm.cl");
     if (program == NULL)
     {
         Cleanup(context, commandQueue, program, kernel, memObjects);
@@ -320,16 +311,14 @@ int main(int argc, char** argv)
     // Create memory objects that will be used as arguments to
     // kernel.  First create host memory arrays that will be
     // used to store the arguments to the kernel
-    unsigned char *src1     = (unsigned char *)malloc(BIG_SIZE);
-    unsigned char *src2      = (unsigned char *)malloc(LIT_SIZE);
-    unsigned char *result     = (unsigned char *)malloc(BIG_SIZE);
-	assert(src1 != NULL);
-	assert(src2 != NULL);
-	assert(result != NULL);
+    unsigned char *src = (unsigned char *)malloc(BIG_SIZE);
+    unsigned char *dst = (unsigned char *)malloc(BIG_SIZE);
+	assert(src != NULL);
+	assert(dst != NULL);
 #else
 	// 分配drm内存 
 	MB_IMAGE_INFO_S disp_info1 = {w1, h1, w1, h1, IMAGE_TYPE_NV12};
-	MB_IMAGE_INFO_S disp_info2 = {w2, h2, w2, h2, IMAGE_TYPE_NV12};
+	MB_IMAGE_INFO_S disp_info2 = {h1, w1, h1, w1, IMAGE_TYPE_NV12};
 	MEDIA_BUFFER mb1 = RK_MPI_MB_CreateImageBuffer(&disp_info1, RK_TRUE, 0); 
 	if (!mb1) {
 		printf("ERROR: no space left!1\n");
@@ -342,30 +331,25 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
-    unsigned char *src1     = (unsigned char *)RK_MPI_MB_GetPtr(mb1);
-    unsigned char *src2     = (unsigned char *)RK_MPI_MB_GetPtr(mb2);
-    unsigned char *result   = src1;;
+    unsigned char *src     = (unsigned char *)RK_MPI_MB_GetPtr(mb1);
+    unsigned char *dst     = (unsigned char *)RK_MPI_MB_GetPtr(mb2);
+    unsigned char *result   = dst;;
 
 	int fd_mb1 = RK_MPI_MB_GetFD(mb1);
 	int fd_mb2 = RK_MPI_MB_GetFD(mb2);
 #endif
 
 	// 加载图片
-	fread(src1, BIG_SIZE, 1, in1_fp);
-	fread(src2, LIT_SIZE, 1, in2_fp);
+	fread(src, BIG_SIZE, 1, in1_fp);
 
 	printf("=================>after read img\n");
 
-static struct timeval t_new, t_old;
 #ifndef DRM
-gettimeofday(&t_old, 0);
-    if (!CreateMemObjects(context, memObjects, src1, src2))
+    if (!CreateMemObjects(context, memObjects, src, dst))
     {
         Cleanup(context, commandQueue, program, kernel, memObjects);
         return 1;
     }
-gettimeofday(&t_new, 0);
-printf("=====>%s:%d\n","buf operate time:", (t_new.tv_sec-t_old.tv_sec)*1000000 + (t_new.tv_usec - t_old.tv_usec));
 #else
 	// 使用arm drm内存进行zero-copy操作
 	cl_int error = CL_SUCCESS;
@@ -377,68 +361,33 @@ printf("=====>%s:%d\n","buf operate time:", (t_new.tv_sec-t_old.tv_sec)*1000000 
 		0
 	};
 
-gettimeofday(&t_old, 0);
-#if 0
-	memObjects[0] = clImportMemoryARM(context,
-										CL_MEM_READ_WRITE,
-										import_properties,
-										&fd_mb1,
-										BIG_SIZE,
-										&error);
-	if( error != CL_SUCCESS ) {
-		printf("ERROR to IMPORT MEM ARM1\n");
-		return -1;
-	}
-	assert(memObjects[0]!=0);
-	memObjects[1] = clImportMemoryARM(context,
-										CL_MEM_READ_WRITE,
-										import_properties,
-										&fd_mb2,
-										LIT_SIZE,
-										&error);
-	if( error != CL_SUCCESS ) {
-		printf("ERROR to IMPORT MEM ARM2\n");
-		return -1;
-	}
-#endif
-gettimeofday(&t_new, 0);
-printf("=====>%s:%d\n","buf operate time:", (t_new.tv_sec-t_old.tv_sec)*1000000 + (t_new.tv_usec - t_old.tv_usec));
 #endif
 
-	printf("=================>after  create objs\n");
-
-	printf("src1 p:%p\n", src1);
-	printf("memObjects 0:%#x\n", (long)memObjects[0]);
-
-#if 1
-    // Create OpenCL kernel y
-    kernel[0] = clCreateKernel(program, "blend_y", NULL);
+	// Create OpenCL kernel
+    kernel[0] = clCreateKernel(program, "rotate_y", NULL);
     if (kernel[0] == NULL)
     {
-        std::cerr << "Failed to create kernel[0]" << std::endl;
+        std::cerr << "Failed to create kernel" << std::endl;
         Cleanup(context, commandQueue, program, kernel, memObjects);
         return 1; 
 	}
 
-	// Create OpenCL kernel uv
-    kernel[1] = clCreateKernel(program, "blend_uv", NULL);
+	// Create OpenCL kernel
+    kernel[1] = clCreateKernel(program, "rotate_uv", NULL);
     if (kernel[1] == NULL)
     {
-        std::cerr << "Failed to create kernel[1]" << std::endl;
+        std::cerr << "Failed to create kernel" << std::endl;
         Cleanup(context, commandQueue, program, kernel, memObjects);
-        return 1; 
-	}
-#endif
+        return 1;
+    }
 
 
-	int count = 10000;
+	printf("=================>after  create objs\n");
 
 	cl_uint one = 1;
 	cl_event event;
 
-	cl_int errcode_ret;
-	cl_kernel _kernel[2];
-
+	int count = 10000;
 	// 循环100 次计算时间
 	for(int i=0; i<count; i++)
 	{
@@ -459,7 +408,7 @@ gettimeofday(&t_old, 0);
 										CL_MEM_READ_WRITE,
 										import_properties,
 										&fd_mb2,
-										LIT_SIZE,
+										BIG_SIZE,
 										&error);
 	if( error != CL_SUCCESS ) {
 		printf("ERROR to IMPORT MEM ARM2\n");
@@ -468,18 +417,14 @@ gettimeofday(&t_old, 0);
     
 #endif
 
-	// 合成Y
-	if(1)
 	{
-	// Set the kernel arguments (w ,h ,....)
+
+	// 合成Y
+    // Set the kernel arguments (w ,h ,....)
     errNum  = clSetKernelArg(kernel[0], 0, sizeof(int), &w1);
     errNum |= clSetKernelArg(kernel[0], 1, sizeof(int), &h1);
-    errNum |= clSetKernelArg(kernel[0], 2, sizeof(int), &w2);
-    errNum |= clSetKernelArg(kernel[0], 3, sizeof(int), &h2);
-    errNum |= clSetKernelArg(kernel[0], 4, sizeof(int), &x);
-    errNum |= clSetKernelArg(kernel[0], 5, sizeof(int), &y);
-    errNum |= clSetKernelArg(kernel[0], 6, sizeof(cl_mem), &memObjects[0]);
-    errNum |= clSetKernelArg(kernel[0], 7, sizeof(cl_mem), &memObjects[1]);
+    errNum |= clSetKernelArg(kernel[0], 2, sizeof(cl_mem), &memObjects[0]);
+    errNum |= clSetKernelArg(kernel[0], 3, sizeof(cl_mem), &memObjects[1]);
     if (errNum != CL_SUCCESS)
     {
         std::cerr << "Error setting kernel arguments." << std::endl;
@@ -488,11 +433,7 @@ gettimeofday(&t_old, 0);
     }
 	//printf("=================>after  set param\n");
 
-
-
-    // size_t globalWorkSize[2] = { ARRAY_SIZE/10,  ARRAY_SIZE/10};
-    size_t globalWorkSize[2] = { h2, w2};
-    // size_t localWorkSize[2] = { 1, 1 };
+    size_t globalWorkSize[2] = { h1, w1};
     size_t localWorkSize[2] = { 10, 10 };
 	size_t dim = 2;
 
@@ -502,28 +443,26 @@ gettimeofday(&t_old, 0);
                                     0, NULL, NULL);
     if (errNum != CL_SUCCESS)
     {
-        std::cerr << "Error y queuing kernel for execution." << std::endl;
+        std::cerr << "Error queuing kernel for execution." << std::endl;
         Cleanup(context, commandQueue, program, kernel, memObjects);
         return 1;
     }
 
-
 	//printf("=================>after call cl\n");
+
 	}
 /////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-	if(1)
+	//if(0)
 	{
 	// 合成UV
-     // Set the kernel arguments (w ,h ,....)
-    errNum  = clSetKernelArg(kernel[1], 0, sizeof(int), &w1);
-    errNum |= clSetKernelArg(kernel[1], 1, sizeof(int), &h1);
-    errNum |= clSetKernelArg(kernel[1], 2, sizeof(int), &w2);
-    errNum |= clSetKernelArg(kernel[1], 3, sizeof(int), &h2);
-    errNum |= clSetKernelArg(kernel[1], 4, sizeof(int), &x);
-    errNum |= clSetKernelArg(kernel[1], 5, sizeof(int), &y);
-    errNum |= clSetKernelArg(kernel[1], 6, sizeof(cl_mem), &memObjects[0]);
-    errNum |= clSetKernelArg(kernel[1], 7, sizeof(cl_mem), &memObjects[1]);
+	const int w11 = w1/2;
+	const int h11 = h1/2;
+    // Set the kernel arguments (w ,h ,....)
+    errNum  = clSetKernelArg(kernel[1], 0, sizeof(int), &w11);
+    errNum |= clSetKernelArg(kernel[1], 1, sizeof(int), &h11);
+    errNum |= clSetKernelArg(kernel[1], 2, sizeof(cl_mem), &memObjects[0]);
+    errNum |= clSetKernelArg(kernel[1], 3, sizeof(cl_mem), &memObjects[1]);
     if (errNum != CL_SUCCESS)
     {
         std::cerr << "Error setting kernel arguments." << std::endl;
@@ -533,7 +472,7 @@ gettimeofday(&t_old, 0);
 	//printf("=================>after  set param\n");
 
     // size_t globalWorkSize[2] = { ARRAY_SIZE/10,  ARRAY_SIZE/10};
-    size_t globalWorkSize[2] = { h2/2, w2/2};
+    size_t globalWorkSize[2] = { h11, w11};
     size_t localWorkSize[2] = { 10, 10 };
 	size_t dim = 2;
 
@@ -541,20 +480,19 @@ gettimeofday(&t_old, 0);
     errNum = clEnqueueNDRangeKernel(commandQueue, kernel[1], dim, NULL,
                                     globalWorkSize, localWorkSize,
                                     0, NULL, &event);
-                                    //0, NULL, NULL);
-
-	//clFinish(commandQueue);
     if (errNum != CL_SUCCESS)
     {
-        std::cerr << "Error uv queuing kernel for execution." << std::endl;
+        std::cerr << "Error queuing kernel for execution." << std::endl;
         Cleanup(context, commandQueue, program, kernel, memObjects);
         return 1;
     }
 
 	//printf("=================>after call cl\n");
 
-
 	}
+
+
+
 	clReleaseMemObject(memObjects[0]);
 	memObjects[0] = 0;
 
@@ -564,12 +502,12 @@ gettimeofday(&t_old, 0);
 	//clFinish(commandQueue);
 	clWaitForEvents(one, &event);
 	clReleaseEvent(event);
+
+
+
 gettimeofday(&t_new, 0);
 printf("=====>%s index:%d :%d\n","wait cl finish time:", i, (t_new.tv_sec-t_old.tv_sec)*1000000 + (t_new.tv_usec - t_old.tv_usec));
-	usleep(5*1000);
 	}
-
-
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -577,12 +515,10 @@ printf("=====>%s index:%d :%d\n","wait cl finish time:", i, (t_new.tv_sec-t_old.
 
 
 #if 1
-    // Read the output buffer back to the Host
 #ifndef DRM
-	// arm 上不用转换
-gettimeofday(&t_old, 0);
-    errNum = clEnqueueReadBuffer(commandQueue, memObjects[0], CL_TRUE,
-                                 0, BIG_SIZE* sizeof(unsigned char), result,
+    // Read the output buffer back to the Host
+    errNum = clEnqueueReadBuffer(commandQueue, memObjects[1], CL_TRUE,
+                                 0, BIG_SIZE* sizeof(unsigned char), dst,
                                  0, NULL, NULL);
     if (errNum != CL_SUCCESS)
     {
@@ -591,17 +527,12 @@ gettimeofday(&t_old, 0);
         //return 1;
 		goto out;
     }
-gettimeofday(&t_new, 0);
-printf("=====>%s:%d\n","buf read time:", (t_new.tv_sec-t_old.tv_sec)*1000000 + (t_new.tv_usec - t_old.tv_usec));
-#else
-	// 因为drm zero-copy所以可以不用这步转换
 #endif
 #endif
 
 	printf("=================>after get buf\n");
 	// 写入数据
-	//fwrite(src1, BIG_SIZE, 1, out_fp);
-	fwrite(result, BIG_SIZE, 1, out_fp);
+	fwrite(dst, BIG_SIZE, 1, out_fp);
 
     std::cout << std::endl;
     std::cout << "Executed program succesfully." << std::endl;
@@ -612,17 +543,17 @@ printf("=====>%s:%d\n","buf read time:", (t_new.tv_sec-t_old.tv_sec)*1000000 + (
 
 #endif
 
+
+
 out:
 #ifndef DRM
-	free(src1);
-	free(src2);
-	free(result);
+	free(src);
+	free(dst);
 #else
 	RK_MPI_MB_ReleaseBuffer(mb1);
 	RK_MPI_MB_ReleaseBuffer(mb2);
 #endif
 	fclose(in1_fp);
-	fclose(in2_fp);
 	fclose(out_fp);
 
     return 0;

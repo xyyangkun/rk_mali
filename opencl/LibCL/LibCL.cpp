@@ -183,6 +183,8 @@ void ClOperate::Cleanup(cl_context context, cl_command_queue commandQueue,
         clReleaseContext(context);
 
 }
+
+// blend
 ClOperate::ClOperate(int w1, int h1, int w2, int h2, int x, int y)
 {
 	this->w1 = w1;
@@ -207,14 +209,31 @@ ClOperate::ClOperate(int w1, int h1, int w2, int h2, int x, int y)
 
 }
 
-ClOperate::ClOperate(int w1, int h1, int x, int y)
-{
-	type = 1;
-}
-ClOperate::~ClOperate()
+// rotate
+ClOperate::ClOperate(int w1, int h1)
 {
 
+	this->w1 = w1;
+	this->h1 = h1;
+
+	type = 1;
+	one = 1;
+	context = 0;
+    commandQueue = 0;
+    program = 0;
+    device = 0;
+    kernel[0] = 0;
+    kernel[1] = 0;
+    memObjects[0] = 0;
+    memObjects[1] = 0;
+	BIG_SIZE = w1*h1*3/2;
 }
+
+ClOperate::~ClOperate()
+{
+	deinitcl();
+}
+
 int ClOperate::initcl() {
     // Create an OpenCL context on first available platform
     context = CreateContext();
@@ -267,7 +286,7 @@ int ClOperate::initkernel() {
 			Cleanup(context, commandQueue, program, kernel, memObjects);
 			return 1; 
 		}
-	}else {
+	}else if(type == 1) {
 		// Create OpenCL kernel y
 		kernel[0] = clCreateKernel(program, "rotate_y", NULL);
 		if (kernel[0] == NULL)
@@ -286,6 +305,8 @@ int ClOperate::initkernel() {
 			return 1; 
 		}
 
+	} else {
+		assert(1);
 	}
 
 }
@@ -336,7 +357,6 @@ int ClOperate::blend(MEDIA_BUFFER mb1, MEDIA_BUFFER mb2) {
 
 	// 合成Y
 	{
-
 	// Set the kernel arguments (w ,h ,....)
     errNum  = clSetKernelArg(kernel[0], 0, sizeof(int), &w1);
     errNum |= clSetKernelArg(kernel[0], 1, sizeof(int), &h1);
@@ -420,6 +440,14 @@ int ClOperate::blend(MEDIA_BUFFER mb1, MEDIA_BUFFER mb2) {
 
 	}
 
+	clReleaseMemObject(memObjects[0]);
+	memObjects[0] = 0;
+
+	clReleaseMemObject(memObjects[1]);
+	memObjects[1] = 0;
+
+
+
 	//clFinish(commandQueue);
 	clWaitForEvents(one, &event);
 	clReleaseEvent(event);
@@ -429,3 +457,128 @@ int ClOperate::blend(MEDIA_BUFFER mb1, MEDIA_BUFFER mb2) {
 
 }
 
+int ClOperate::rotate(MEDIA_BUFFER mb1, MEDIA_BUFFER mb2) {
+	unsigned char *src     = (unsigned char *)RK_MPI_MB_GetPtr(mb1);
+    unsigned char *dst     = (unsigned char *)RK_MPI_MB_GetPtr(mb2);
+    unsigned char *result   = dst;;
+
+	int fd_mb1 = RK_MPI_MB_GetFD(mb1);
+	int fd_mb2 = RK_MPI_MB_GetFD(mb2);
+
+	// 使用arm drm内存进行zero-copy操作
+	cl_int error = CL_SUCCESS;
+	const cl_import_properties_arm import_properties[] =
+	{
+		CL_IMPORT_TYPE_ARM,
+		//CL_IMPORT_TYPE_HOST_ARM,
+		CL_IMPORT_TYPE_DMA_BUF_ARM,
+		0
+	};
+
+	memObjects[0] = clImportMemoryARM(context,
+										CL_MEM_READ_WRITE,
+										import_properties,
+										&fd_mb1,
+										BIG_SIZE,
+										&error);
+	if( error != CL_SUCCESS ) {
+		printf("ERROR to IMPORT MEM ARM1\n");
+		return -1;
+	}
+	assert(memObjects[0]!=0);
+	memObjects[1] = clImportMemoryARM(context,
+										CL_MEM_READ_WRITE,
+										import_properties,
+										&fd_mb2,
+										BIG_SIZE,
+										&error);
+	if( error != CL_SUCCESS ) {
+		printf("ERROR to IMPORT MEM ARM2\n");
+		return -1;
+	}
+    
+	{
+	// 合成Y
+    // Set the kernel arguments (w ,h ,....)
+    errNum  = clSetKernelArg(kernel[0], 0, sizeof(int), &w1);
+    errNum |= clSetKernelArg(kernel[0], 1, sizeof(int), &h1);
+    errNum |= clSetKernelArg(kernel[0], 2, sizeof(cl_mem), &memObjects[0]);
+    errNum |= clSetKernelArg(kernel[0], 3, sizeof(cl_mem), &memObjects[1]);
+    if (errNum != CL_SUCCESS)
+    {
+        std::cerr << "Error setting kernel arguments." << std::endl;
+        Cleanup(context, commandQueue, program, kernel, memObjects);
+        return 1;
+    }
+	//printf("=================>after  set param\n");
+
+    size_t globalWorkSize[2] = { h1, w1};
+    size_t localWorkSize[2] = { 10, 10 };
+	size_t dim = 2;
+
+    // Queue the kernel up for execution across the array
+    errNum = clEnqueueNDRangeKernel(commandQueue, kernel[0], dim, NULL,
+                                    globalWorkSize, localWorkSize,
+                                    0, NULL, NULL);
+    if (errNum != CL_SUCCESS)
+    {
+        std::cerr << "Error queuing kernel for execution." << std::endl;
+        Cleanup(context, commandQueue, program, kernel, memObjects);
+        return 1;
+    }
+
+	//printf("=================>after call cl\n");
+
+	}
+/////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+	{
+	// 合成UV
+	const unsigned int w11 = w1/2;
+	const unsigned int h11 = h1/2;
+    // Set the kernel arguments (w ,h ,....)
+    errNum  = clSetKernelArg(kernel[1], 0, sizeof(int), &w11);
+    errNum |= clSetKernelArg(kernel[1], 1, sizeof(int), &h11);
+    errNum |= clSetKernelArg(kernel[1], 2, sizeof(cl_mem), &memObjects[0]);
+    errNum |= clSetKernelArg(kernel[1], 3, sizeof(cl_mem), &memObjects[1]);
+    if (errNum != CL_SUCCESS)
+    {
+        std::cerr << "Error setting kernel arguments." << std::endl;
+        Cleanup(context, commandQueue, program, kernel, memObjects);
+        return 1;
+    }
+	//printf("=================>after  set param\n");
+
+    // size_t globalWorkSize[2] = { ARRAY_SIZE/10,  ARRAY_SIZE/10};
+    size_t globalWorkSize[2] = { h11, w11};
+    size_t localWorkSize[2] = { 10, 10 };
+	size_t dim = 2;
+
+    // Queue the kernel up for execution across the array
+    errNum = clEnqueueNDRangeKernel(commandQueue, kernel[1], dim, NULL,
+                                    globalWorkSize, localWorkSize,
+                                    0, NULL, &event);
+    if (errNum != CL_SUCCESS)
+    {
+        std::cerr << "Error queuing kernel for execution." << std::endl;
+        Cleanup(context, commandQueue, program, kernel, memObjects);
+        return 1;
+    }
+
+	//printf("=================>after call cl\n");
+
+	}
+
+
+	clReleaseMemObject(memObjects[0]);
+	memObjects[0] = 0;
+
+	clReleaseMemObject(memObjects[1]);
+	memObjects[1] = 0;
+
+	//clFinish(commandQueue);
+	clWaitForEvents(one, &event);
+	clReleaseEvent(event);
+
+	return 0;
+}

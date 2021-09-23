@@ -43,13 +43,16 @@ class ClOperate
 {
 public:
 ClOperate(int w1, int h1, int w2, int h2, int x, int y);
-ClOperate(int w1, int h1, int x, int y);
+ClOperate(int w1, int h1);
 ~ClOperate();
 int initcl();
 int deinitcl();
 int initkernel();
 int deinitkernel();
+
 int blend(MEDIA_BUFFER mb1, MEDIA_BUFFER mb2);
+
+int rotate(MEDIA_BUFFER mb1, MEDIA_BUFFER mb2);
 
 private:
 void Cleanup(cl_context context, cl_command_queue commandQueue,
@@ -60,7 +63,7 @@ cl_command_queue CreateCommandQueue(cl_context context, cl_device_id *device);
 cl_context CreateContext();
 
 private:
-	int w1,h1, w2,h2, x, y;
+	unsigned int w1,h1, w2,h2, x, y;
 	int BIG_SIZE;
 	int LIT_SIZE;
 	int type;
