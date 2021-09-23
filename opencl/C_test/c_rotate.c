@@ -227,16 +227,15 @@ static void rotateYUV420SPTable(char* src,char* dst, int width,int height)
 
 	printf("will rotate uv\n");
 #if 0
-	for(int i=0;i<wh/2;i+=2) {
-			dst[k] = src[table2[k] ]; 
-			dst[k+1]=src[table2[k+1]];
-			k+=2;
-	}
-#else
 	k = 0;
 	for(int i=0;i<wh/4;i++) {
 		dst[wh + 2*i] = src[table2[2*i] ]; 
 		dst[wh + 2*i+1]=src[table2[2*i+1]];
+	}
+#else
+	k = 0;
+	for(int i=0;i<wh/2;i++) {
+		dst[wh + i] = src[table2[i] ]; 
 	}
 #endif
 	printf("after rotate uv\n");

@@ -109,7 +109,8 @@ static void blendTable(char* dst, char* src, int width, int height)
 
 int main(int argc, char **argv) {
 	char *in1 = "1920x1080_nv12.yuv";
-	char *in2 = "720x576_nv12.yuv";
+	// char *in2 = "720x576_nv12.yuv";
+	char *in2 = "720p_nv12.yuv";
 	char *out = "1920x1080_nv12_blendout.yuv";
 
 	if(argc == 3) {
@@ -121,8 +122,10 @@ int main(int argc, char **argv) {
 	int h1 = 1080;
 	int size1 = w1*h1*3/2;
 
-	int w2 = 720;
-	int h2 = 576;
+	// int w2 = 720;
+	//int h2 = 576;
+	int w2 = 1280;
+	int h2 = 720;
 	int size2 = w2*h2*3/2;
 
 

@@ -805,6 +805,29 @@ void displayInfo(void)
 
 			std::cout << std::endl << std::endl;
 		}
+
+		// getsupportedImageformates
+		if(0)
+		{
+#define MAX_NUM_FORMATS 128
+
+			cl_image_format format_list[ MAX_NUM_FORMATS] = {0};
+			cl_int          num_format_list_entries       = MAX_NUM_FORMATS;
+			cl_uint          num_reported_image_formats    = 0;
+			cl_int          errcode                       = 0;
+
+			errcode = clGetSupportedImageFormats(context,
+					CL_MEM_READ_ONLY,
+					//CL_MEM_OBJECT_IMAGE2D,
+					CL_MEM_OBJECT_IMAGE1D_ARRAY,
+					num_format_list_entries,
+					format_list,
+					&num_reported_image_formats);
+			printf("errcode = %d\n", errcode);
+			for(int i =0; i < num_format_list_entries; i++ ) {
+				printf("format[%d]=%d\n", i, format_list[i]);
+			}
+		}
 	}
 }
 
@@ -816,6 +839,8 @@ int main(int argc, char** argv)
     cl_context context = 0;
 
 	displayInfo();
+
+
 
     return 0;
 }

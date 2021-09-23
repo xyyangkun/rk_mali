@@ -46,14 +46,14 @@
 
 // 处理数据的格式为yuv
 // 这个程序使用opencl在1920x1080的(20, 20)位置上叠加一个720x576的数据
-const int w1 = 1920;
-const int h1 = 1080;
-const int w2 = 1280;
-const int h2 = 720;
-const int x = 20;
-const int y = 20;
-const int BIG_SIZE = w1*h1*3/2;
-const int LIT_SIZE = w2*h2*3/2;
+unsigned int w1 = 1920;
+unsigned int h1 = 1080;
+unsigned int w2 = 1280;
+unsigned int h2 = 720;
+unsigned int x = 20;
+unsigned int y = 20;
+unsigned int BIG_SIZE = w1*h1*3/2;
+unsigned int LIT_SIZE = w2*h2*3/2;
 
 ///
 //  Create an OpenCL context on the first available platform using
@@ -251,6 +251,85 @@ void Cleanup(cl_context context, cl_command_queue commandQueue,
 
 }
 
+static int *table1 = NULL;
+static int *table2 = NULL;
+MEDIA_BUFFER mb_table1 = 0;
+MEDIA_BUFFER mb_table2 = 0;
+int fd_mb_table1;
+int fd_mb_table2;
+void delTable() {
+
+	RK_MPI_MB_ReleaseBuffer(mb_table1);
+	RK_MPI_MB_ReleaseBuffer(mb_table2);
+	table1 = NULL;
+	table2 = NULL;
+}
+// 实现查找表查找表
+void createBlendTable(unsigned int w1, unsigned int h1, unsigned int x, unsigned int y, 
+						unsigned int w2, unsigned int h2) {
+	assert(table1 == NULL);
+	assert(table2 == NULL);
+
+	MB_IMAGE_INFO_S disp_info1 = {w2, h2, w2, h2, IMAGE_TYPE_ARGB8888};
+	MB_IMAGE_INFO_S disp_info2 = {w2, h1/2, w2, h2/2, IMAGE_TYPE_ARGB8888};
+
+	MEDIA_BUFFER mb_table1 = RK_MPI_MB_CreateImageBuffer(&disp_info1, RK_TRUE, 0); 
+	if (!mb_table1) {
+		printf("ERROR: no space left!1\n");
+		return ;
+	}
+	MEDIA_BUFFER mb_table2 = RK_MPI_MB_CreateImageBuffer(&disp_info2, RK_TRUE, 0); 
+	if (!mb_table2) {
+		printf("ERROR: no space left!2\n");
+		return ;
+	}
+	fd_mb_table1 = RK_MPI_MB_GetFD(mb_table1);
+	fd_mb_table2 = RK_MPI_MB_GetFD(mb_table2);
+	table1 = (int *)RK_MPI_MB_GetPtr(mb_table1);
+	table2 = (int *)RK_MPI_MB_GetPtr(mb_table2);
+
+	printf("will create y table\n");
+
+	int wh = w1 * h1;
+	//旋转Y
+	int k = 0;
+	for(int h = 0; h<h2; h++){
+		for(int w = 0; w<w2; w++) {
+			table1[h*w2 + w] = (h+y)*w1 + x + w;
+			assert(h*w2 + w < w2*h2);
+		}
+	}
+
+	k = 0;
+	printf("will create uv table\n");
+	for(int h = 0; h<h2/2; h++){
+		for(int w = 0; w<w2/2; w++) {
+			table2[h*w2 + 2*w]     = wh + (h + y/2 ) * w1 + x + 2*w; 
+			table2[h*w2 + 2*w + 1] = wh + (h + y/2 ) * w1 + x + 2*w + 1;
+			assert(h*w2 + 2*w + 1 < w2*h2/2);
+		}
+	}
+	printf("after table:k=%d wh_wh/2=%d\n", k, wh+wh/2);
+
+}
+// 通过查找表示实现
+static void blendByTable(char* dst, char* src, int width, int height)
+{
+
+	int wh = width * height;
+	printf("will rotate y\n");
+	//旋转Y
+	for(int i=0;i<wh;i++) {
+		dst[table1[i]] = src[i];
+	}
+
+	printf("will rotate uv\n");
+	for(int i=0;i<wh/2;i++) {
+		dst[table2[i]] = src[wh + i]; 
+	}
+	printf("after rotate uv\n");
+}
+
 ///
 //	main() for HelloWorld example
 //
@@ -310,7 +389,7 @@ int main(int argc, char** argv)
 #endif
 
     // Create OpenCL program from HelloWorld.cl kernel source
-    program = CreateProgram(context, device, "Blend_drm.cl");
+    program = CreateProgram(context, device, "Blend_drm_1d.cl");
     if (program == NULL)
     {
         Cleanup(context, commandQueue, program, kernel, memObjects);
@@ -431,14 +510,40 @@ printf("=====>%s:%d\n","buf operate time:", (t_new.tv_sec-t_old.tv_sec)*1000000 
 	}
 #endif
 
+	cl_mem tableObjects[2] = { 0, 0};
+	// 初始化表
+	createBlendTable(w1, h1, x, y, w2, h2);
+	// 构造opencl table 内存
+	tableObjects[0] = clImportMemoryARM(context,
+										CL_MEM_READ_ONLY,
+										import_properties,
+										&fd_mb_table1,
+										w2*h2*4,
+										&error);
+	if( error != CL_SUCCESS ) {
+		printf("ERROR to IMPORT table MEM ARM1\n");
+		return -1;
+	}
+	assert(tableObjects[0]!=0);
+	tableObjects[1] = clImportMemoryARM(context,
+										CL_MEM_READ_ONLY,
+										import_properties,
+										&fd_mb_table2,
+										w2*h2*2,
+										&error);
+	if( error != CL_SUCCESS ) {
+		printf("ERROR to IMPORT table MEM ARM2\n");
+		return -1;
+	}
+
 
 	int count = 10000;
+	//int count = 1;
 
 	cl_uint one = 1;
 	cl_event event;
 
 	cl_int errcode_ret;
-	cl_kernel _kernel[2];
 
 	// 循环100 次计算时间
 	for(int i=0; i<count; i++)
@@ -473,14 +578,9 @@ gettimeofday(&t_old, 0);
 	if(1)
 	{
 	// Set the kernel arguments (w ,h ,....)
-    errNum  = clSetKernelArg(kernel[0], 0, sizeof(int), &w1);
-    errNum |= clSetKernelArg(kernel[0], 1, sizeof(int), &h1);
-    errNum |= clSetKernelArg(kernel[0], 2, sizeof(int), &w2);
-    errNum |= clSetKernelArg(kernel[0], 3, sizeof(int), &h2);
-    errNum |= clSetKernelArg(kernel[0], 4, sizeof(int), &x);
-    errNum |= clSetKernelArg(kernel[0], 5, sizeof(int), &y);
-    errNum |= clSetKernelArg(kernel[0], 6, sizeof(cl_mem), &memObjects[0]);
-    errNum |= clSetKernelArg(kernel[0], 7, sizeof(cl_mem), &memObjects[1]);
+    errNum  = clSetKernelArg(kernel[0], 0, sizeof(cl_mem), &tableObjects[0]);
+    errNum |= clSetKernelArg(kernel[0], 1, sizeof(cl_mem), &memObjects[0]);
+    errNum |= clSetKernelArg(kernel[0], 2, sizeof(cl_mem), &memObjects[1]);
     if (errNum != CL_SUCCESS)
     {
         std::cerr << "Error setting kernel arguments." << std::endl;
@@ -491,16 +591,14 @@ gettimeofday(&t_old, 0);
 
 
 
-    // size_t globalWorkSize[2] = { ARRAY_SIZE/10,  ARRAY_SIZE/10};
-    size_t globalWorkSize[2] = { h2, w2};
-    // size_t localWorkSize[2] = { 1, 1 };
-    size_t localWorkSize[2] = { 10, 10 };
-	size_t dim = 2;
+    size_t globalWorkSize[1] = { h2 *w2};
+    size_t localWorkSize[1] = { 200 };
+	size_t dim = 1;
 
     // Queue the kernel up for execution across the array
     errNum = clEnqueueNDRangeKernel(commandQueue, kernel[0], dim, NULL,
                                     globalWorkSize, localWorkSize,
-                                    0, NULL, NULL);
+                                    0, NULL, &event);
     if (errNum != CL_SUCCESS)
     {
         std::cerr << "Error y queuing kernel for execution." << std::endl;
@@ -508,7 +606,8 @@ gettimeofday(&t_old, 0);
         return 1;
     }
 
-
+	//clWaitForEvents(one, &event);
+	//clReleaseEvent(event);
 	//printf("=================>after call cl\n");
 	}
 /////////////////////////////////////////////////////////////////////////////
@@ -516,15 +615,12 @@ gettimeofday(&t_old, 0);
 	if(1)
 	{
 	// 合成UV
+	int offset = w2 * h2;
      // Set the kernel arguments (w ,h ,....)
-    errNum  = clSetKernelArg(kernel[1], 0, sizeof(int), &w1);
-    errNum |= clSetKernelArg(kernel[1], 1, sizeof(int), &h1);
-    errNum |= clSetKernelArg(kernel[1], 2, sizeof(int), &w2);
-    errNum |= clSetKernelArg(kernel[1], 3, sizeof(int), &h2);
-    errNum |= clSetKernelArg(kernel[1], 4, sizeof(int), &x);
-    errNum |= clSetKernelArg(kernel[1], 5, sizeof(int), &y);
-    errNum |= clSetKernelArg(kernel[1], 6, sizeof(cl_mem), &memObjects[0]);
-    errNum |= clSetKernelArg(kernel[1], 7, sizeof(cl_mem), &memObjects[1]);
+    errNum |= clSetKernelArg(kernel[1], 0, sizeof(cl_mem), &tableObjects[1]);
+    errNum |= clSetKernelArg(kernel[1], 1, sizeof(int), &offset);
+    errNum |= clSetKernelArg(kernel[1], 2, sizeof(cl_mem), &memObjects[0]);
+    errNum |= clSetKernelArg(kernel[1], 3, sizeof(cl_mem), &memObjects[1]);
     if (errNum != CL_SUCCESS)
     {
         std::cerr << "Error setting kernel arguments." << std::endl;
@@ -533,10 +629,9 @@ gettimeofday(&t_old, 0);
     }
 	//printf("=================>after  set param\n");
 
-    // size_t globalWorkSize[2] = { ARRAY_SIZE/10,  ARRAY_SIZE/10};
-    size_t globalWorkSize[2] = { h2/2, w2/2};
-    size_t localWorkSize[2] = { 10, 10 };
-	size_t dim = 2;
+    size_t globalWorkSize[1] = { w2*h2/2};
+    size_t localWorkSize[1] = { 200 };
+	size_t dim = 1;
 
     // Queue the kernel up for execution across the array
     errNum = clEnqueueNDRangeKernel(commandQueue, kernel[1], dim, NULL,
@@ -565,6 +660,8 @@ gettimeofday(&t_old, 0);
 	//clFinish(commandQueue);
 	clWaitForEvents(one, &event);
 	clReleaseEvent(event);
+
+
 gettimeofday(&t_new, 0);
 printf("=====>%s index:%d :%d\n","wait cl finish time:", i, (t_new.tv_sec-t_old.tv_sec)*1000000 + (t_new.tv_usec - t_old.tv_usec));
 	usleep(5*1000);
@@ -574,8 +671,13 @@ printf("=====>%s index:%d :%d\n","wait cl finish time:", i, (t_new.tv_sec-t_old.
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
+	clReleaseMemObject(tableObjects[0]);
+	tableObjects[0] = 0;
 
+	clReleaseMemObject(tableObjects[1]);
+	tableObjects[1] = 0;
 
+	delTable();
 
 #if 1
     // Read the output buffer back to the Host

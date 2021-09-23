@@ -48,9 +48,9 @@
 
 // 处理数据的格式为yuv
 // 这个程序使用opencl在1920x1080的(20, 20)位置上叠加一个720x576的数据
-const int w1 = 1920;
-const int h1 = 1080;
-const int BIG_SIZE = w1*h1*3/2;
+const unsigned int w1 = 1920;
+const unsigned int h1 = 1080;
+const unsigned int BIG_SIZE = w1*h1*3/2;
 
 static struct timeval t_new, t_old;
 ///
@@ -248,6 +248,154 @@ void Cleanup(cl_context context, cl_command_queue commandQueue,
         clReleaseContext(context);
 
 }
+static unsigned int *table1 = NULL;
+static unsigned int *table2 = NULL;
+MEDIA_BUFFER mb_table1 = 0;
+MEDIA_BUFFER mb_table2 = 0;
+int fd_mb_table1;
+int fd_mb_table2;
+void delTable() {
+
+	RK_MPI_MB_ReleaseBuffer(mb_table1);
+	RK_MPI_MB_ReleaseBuffer(mb_table2);
+	table1 = NULL;
+	table2 = NULL;
+}
+
+// 实现查找表查找表
+void createRotateTable_270(unsigned int width, unsigned int height) {
+	assert(table1 == NULL);
+	assert(table2 == NULL);
+
+	MB_IMAGE_INFO_S disp_info = {width*4, height, width*4, height, IMAGE_TYPE_ARGB8888};
+
+	MEDIA_BUFFER mb_table1 = RK_MPI_MB_CreateImageBuffer(&disp_info, RK_TRUE, 0); 
+	if (!mb_table1) {
+		printf("ERROR: no space left!1\n");
+		return ;
+	}
+	MEDIA_BUFFER mb_table2 = RK_MPI_MB_CreateImageBuffer(&disp_info, RK_TRUE, 0); 
+	if (!mb_table2) {
+		printf("ERROR: no space left!2\n");
+		return ;
+	}
+	fd_mb_table1 = RK_MPI_MB_GetFD(mb_table1);
+	fd_mb_table2 = RK_MPI_MB_GetFD(mb_table2);
+	table1 = (unsigned int *)RK_MPI_MB_GetPtr(mb_table1);
+	table2 = (unsigned int *)RK_MPI_MB_GetPtr(mb_table2);
+
+
+	int wh = width * height;
+
+
+	printf("will create y table\n");
+	//旋转Y
+	int k = 0;
+	for(int i=0;i<width;i++) {
+		for(int j=0;j<height;j++) 
+		{
+			table1[k] = width*j + (width-i);   
+			k++;
+		}
+	}
+	assert(k <= wh);
+
+	k = 0;
+	printf("will create uv table\n");
+	for(int i=0;i<width;i+=2) {
+		for(int j=0;j<height/2;j++) 
+		{ 
+			table2[k]   = wh + width*j + (width-i); 
+			table2[k+1] = wh + width*j + (width-i)+1;
+			k+=2;
+		}
+	}
+	assert(k <= wh+wh/2);
+	printf("after table:k=%d wh_wh/2=%d\n", k, wh+wh/2);
+
+}
+void createRotateTable_90(unsigned int width, unsigned int height) {
+	assert(table1 == NULL);
+	assert(table2 == NULL);
+
+	// 更改为short 类型
+	MB_IMAGE_INFO_S disp_info = {width*4, height, width*4, height, IMAGE_TYPE_ARGB8888};
+
+	MEDIA_BUFFER mb_table1 = RK_MPI_MB_CreateImageBuffer(&disp_info, RK_TRUE, 0); 
+	if (!mb_table1) {
+		printf("ERROR: no space left!1\n");
+		return ;
+	}
+	MEDIA_BUFFER mb_table2 = RK_MPI_MB_CreateImageBuffer(&disp_info, RK_TRUE, 0); 
+	if (!mb_table2) {
+		printf("ERROR: no space left!2\n");
+		return ;
+	}
+	fd_mb_table1 = RK_MPI_MB_GetFD(mb_table1);
+	fd_mb_table2 = RK_MPI_MB_GetFD(mb_table2);
+	table1 = (unsigned int *)RK_MPI_MB_GetPtr(mb_table1);
+	table2 = (unsigned int *)RK_MPI_MB_GetPtr(mb_table2);
+
+
+
+	int wh = width * height;
+
+	printf("will create y table\n");
+	//旋转Y
+	int k = 0;
+	for(int i=0;i<width;i++) {
+		for(int j=0;j<height;j++) 
+		{
+			table1[k] = width*(height-j) + i;   
+			k++;
+		}
+	}
+	assert(k <= wh);
+
+	k = 0;
+	printf("will create uv table\n");
+	for(int i=0;i<width;i+=2) {
+		for(int j=0;j<height/2;j++) 
+		{ 
+			table2[k]   = wh + width*(height/2-j) + i; 
+			table2[k+1] = wh + width*(height/2-j) + i+1;
+			k+=2;
+		}
+	}
+	assert(k <= wh+wh/2);
+	printf("after table:k=%d wh_wh/2=%d\n", k, wh+wh/2);
+
+}
+// 通过查找表示实现
+static void rotateYUV420SPTable(char* src,char* dst, int width,int height)
+{
+
+	int wh = width * height;
+	int k = 0;
+	printf("will rotate y\n");
+	//旋转Y
+	for(int i=0;i<wh;i++) {
+			dst[k] = src[table1[k]];
+			k++;
+	}
+
+	printf("will rotate uv\n");
+#if 0
+	for(int i=0;i<wh/2;i+=2) {
+			dst[k] = src[table2[k] ]; 
+			dst[k+1]=src[table2[k+1]];
+			k+=2;
+	}
+#else
+	k = 0;
+	for(int i=0;i<wh/4;i++) {
+		dst[wh + 2*i] = src[table2[2*i] ]; 
+		dst[wh + 2*i+1]=src[table2[2*i+1]];
+	}
+#endif
+	printf("after rotate uv\n");
+}
+
 
 ///
 //	main() for HelloWorld example
@@ -300,7 +448,7 @@ int main(int argc, char** argv)
     }
 
     // Create OpenCL program from HelloWorld.cl kernel source
-    program = CreateProgram(context, device, "Rotate_drm.cl");
+    program = CreateProgram(context, device, "Rotate_drm_1d.cl");
     if (program == NULL)
     {
         Cleanup(context, commandQueue, program, kernel, memObjects);
@@ -384,10 +532,42 @@ int main(int argc, char** argv)
 
 	printf("=================>after  create objs\n");
 
+
+
+	cl_mem tableObjects[2] = { 0, 0};
+	// 初始化表
+	createRotateTable_90(w1, h1);
+	// 构造opencl table 内存
+	tableObjects[0] = clImportMemoryARM(context,
+										CL_MEM_READ_ONLY,
+										import_properties,
+										&fd_mb_table1,
+										w1*h1*4,
+										&error);
+	if( error != CL_SUCCESS ) {
+		printf("ERROR to IMPORT table MEM ARM1\n");
+		return -1;
+	}
+	assert(tableObjects[0]!=0);
+	tableObjects[1] = clImportMemoryARM(context,
+										CL_MEM_READ_ONLY,
+										import_properties,
+										&fd_mb_table2,
+										w1*h1*2,
+										&error);
+	if( error != CL_SUCCESS ) {
+		printf("ERROR to IMPORT table MEM ARM2\n");
+		return -1;
+	}
+
+
+
+
 	cl_uint one = 1;
 	cl_event event;
 
-	int count = 10000;
+	// int count = 10000;
+	int count = 1;
 	// 循环100 次计算时间
 	for(int i=0; i<count; i++)
 	{
@@ -418,13 +598,11 @@ gettimeofday(&t_old, 0);
 #endif
 
 	{
-
 	// 合成Y
     // Set the kernel arguments (w ,h ,....)
-    errNum  = clSetKernelArg(kernel[0], 0, sizeof(int), &w1);
-    errNum |= clSetKernelArg(kernel[0], 1, sizeof(int), &h1);
-    errNum |= clSetKernelArg(kernel[0], 2, sizeof(cl_mem), &memObjects[0]);
-    errNum |= clSetKernelArg(kernel[0], 3, sizeof(cl_mem), &memObjects[1]);
+    errNum  = clSetKernelArg(kernel[0], 0, sizeof(cl_mem), &tableObjects[0]);
+    errNum |= clSetKernelArg(kernel[0], 1, sizeof(cl_mem), &memObjects[0]);
+    errNum |= clSetKernelArg(kernel[0], 2, sizeof(cl_mem), &memObjects[1]);
     if (errNum != CL_SUCCESS)
     {
         std::cerr << "Error setting kernel arguments." << std::endl;
@@ -433,9 +611,9 @@ gettimeofday(&t_old, 0);
     }
 	//printf("=================>after  set param\n");
 
-    size_t globalWorkSize[2] = { h1, w1};
-    size_t localWorkSize[2] = { 10, 10 };
-	size_t dim = 2;
+    size_t globalWorkSize[1] = { h1*w1};
+    size_t localWorkSize[1] = { 320 };
+	size_t dim = 1;
 
     // Queue the kernel up for execution across the array
     errNum = clEnqueueNDRangeKernel(commandQueue, kernel[0], dim, NULL,
@@ -453,14 +631,13 @@ gettimeofday(&t_old, 0);
 	}
 /////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-	//if(0)
+	// if(0)
 	{
 	// 合成UV
-	const int w11 = w1/2;
-	const int h11 = h1/2;
+	int offset = w1 * h1;
     // Set the kernel arguments (w ,h ,....)
-    errNum  = clSetKernelArg(kernel[1], 0, sizeof(int), &w11);
-    errNum |= clSetKernelArg(kernel[1], 1, sizeof(int), &h11);
+    errNum  = clSetKernelArg(kernel[1], 0, sizeof(cl_mem), &tableObjects[1]);
+    errNum |= clSetKernelArg(kernel[1], 1, sizeof(int), &offset);
     errNum |= clSetKernelArg(kernel[1], 2, sizeof(cl_mem), &memObjects[0]);
     errNum |= clSetKernelArg(kernel[1], 3, sizeof(cl_mem), &memObjects[1]);
     if (errNum != CL_SUCCESS)
@@ -471,10 +648,9 @@ gettimeofday(&t_old, 0);
     }
 	//printf("=================>after  set param\n");
 
-    // size_t globalWorkSize[2] = { ARRAY_SIZE/10,  ARRAY_SIZE/10};
-    size_t globalWorkSize[2] = { h11, w11};
-    size_t localWorkSize[2] = { 10, 10 };
-	size_t dim = 2;
+    size_t globalWorkSize[1] = { w1*h1/2 };
+    size_t localWorkSize[1] = { 300 };
+	size_t dim = 1;
 
     // Queue the kernel up for execution across the array
     errNum = clEnqueueNDRangeKernel(commandQueue, kernel[1], dim, NULL,
@@ -513,6 +689,7 @@ printf("=====>%s index:%d :%d\n","wait cl finish time:", i, (t_new.tv_sec-t_old.
 
 
 
+	clFinish(commandQueue);
 
 #if 1
 #ifndef DRM
