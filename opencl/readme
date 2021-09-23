@@ -1,0 +1,12 @@
+C_test 			: 使用C验证算法
+HelloWorld  	: opencl helloworld
+Blend 			: opencl 普通blend 
+Blend_drm  		: opencl arm drm zero-copy
+Blend_drm_1d  	: opencl arm drm 查表优化， 2字节4字节复制优化
+
+Rotate 			: opencl 旋转实现 
+Rotate_drm  	: opencl rotate drm zero-copy
+Rotate_drm_1d	: opencl arm drm 查表优化， 2字节4字节复制优化
+
+OpenCLInfo  	: 查看opencl 信息
+LibCL  			: opencl 造作封装
