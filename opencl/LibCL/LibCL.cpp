@@ -185,7 +185,8 @@ void ClOperate::Cleanup(cl_context context, cl_command_queue commandQueue,
 }
 
 // blend
-ClOperate::ClOperate(int w1, int h1, int w2, int h2, int x, int y)
+// type = 0 普通blend type = 1查表优化blend
+ClOperate::ClOperate(int w1, int h1, int w2, int h2, int x, int y, int type/*=0*/)
 {
 	this->w1 = w1;
 	this->h1 = h1;
@@ -193,8 +194,8 @@ ClOperate::ClOperate(int w1, int h1, int w2, int h2, int x, int y)
 	this->h2 = h2;
 	this->x = x;
 	this->y = y;
+	this->type = type/*default = 0*/;
 
-	type = 0;
 	one = 1;
 	context = 0;
     commandQueue = 0;
@@ -207,6 +208,8 @@ ClOperate::ClOperate(int w1, int h1, int w2, int h2, int x, int y)
 	BIG_SIZE = w1*h1*3/2;
 	LIT_SIZE = w2*h2*3/2;
 
+	tableObjects[0] = 0;
+	tableObjects[1] = 0;
 }
 
 // rotate
@@ -231,6 +234,7 @@ ClOperate::ClOperate(int w1, int h1)
 
 ClOperate::~ClOperate()
 {
+	deinit_blend_table();
 	deinitcl();
 }
 
@@ -298,6 +302,25 @@ int ClOperate::initkernel() {
 
 		// Create OpenCL kernel uv
 		kernel[1] = clCreateKernel(program, "rotate_uv", NULL);
+		if (kernel[1] == NULL)
+		{
+			std::cerr << "Failed to create kernel[1]" << std::endl;
+			Cleanup(context, commandQueue, program, kernel, memObjects);
+			return 1; 
+		}
+
+	}else if(type == 2) {
+		// Create OpenCL kernel y
+		kernel[0] = clCreateKernel(program, "blend_1d_y", NULL);
+		if (kernel[0] == NULL)
+		{
+			std::cerr << "Failed to create kernel[0]" << std::endl;
+			Cleanup(context, commandQueue, program, kernel, memObjects);
+			return 1; 
+		}
+
+		// Create OpenCL kernel uv
+		kernel[1] = clCreateKernel(program, "blend_1d_uv", NULL);
 		if (kernel[1] == NULL)
 		{
 			std::cerr << "Failed to create kernel[1]" << std::endl;
@@ -579,6 +602,275 @@ int ClOperate::rotate(MEDIA_BUFFER mb1, MEDIA_BUFFER mb2) {
 	//clFinish(commandQueue);
 	clWaitForEvents(one, &event);
 	clReleaseEvent(event);
+
+	return 0;
+}
+
+static int *table1 = NULL;
+static int *table2 = NULL;
+MEDIA_BUFFER mb_table1 = 0;
+MEDIA_BUFFER mb_table2 = 0;
+int fd_mb_table1;
+int fd_mb_table2;
+void delTable() {
+
+	if(mb_table1) {
+		RK_MPI_MB_ReleaseBuffer(mb_table1);
+		table1 = NULL;
+	}
+	if(mb_table2) {
+		RK_MPI_MB_ReleaseBuffer(mb_table2);
+		table2 = NULL;
+	}
+}
+// 实现查找表查找表
+void createBlendTable(unsigned int w1, unsigned int h1, unsigned int x, unsigned int y, 
+						unsigned int w2, unsigned int h2) {
+	assert(table1 == NULL);
+	assert(table2 == NULL);
+
+	MB_IMAGE_INFO_S disp_info1 = {w2, h2, w2, h2, IMAGE_TYPE_ARGB8888};
+	MB_IMAGE_INFO_S disp_info2 = {w2, h1/2, w2, h2/2, IMAGE_TYPE_ARGB8888};
+
+	MEDIA_BUFFER mb_table1 = RK_MPI_MB_CreateImageBuffer(&disp_info1, RK_TRUE, 0); 
+	if (!mb_table1) {
+		printf("ERROR: no space left!1\n");
+		return ;
+	}
+	MEDIA_BUFFER mb_table2 = RK_MPI_MB_CreateImageBuffer(&disp_info2, RK_TRUE, 0); 
+	if (!mb_table2) {
+		printf("ERROR: no space left!2\n");
+		return ;
+	}
+	fd_mb_table1 = RK_MPI_MB_GetFD(mb_table1);
+	fd_mb_table2 = RK_MPI_MB_GetFD(mb_table2);
+	table1 = (int *)RK_MPI_MB_GetPtr(mb_table1);
+	table2 = (int *)RK_MPI_MB_GetPtr(mb_table2);
+
+	printf("will create y table\n");
+
+	int wh = w1 * h1;
+	//旋转Y
+	int k = 0;
+	for(int h = 0; h<h2; h++){
+		for(int w = 0; w<w2; w++) {
+			table1[h*w2 + w] = (h+y)*w1 + x + w;
+			assert(h*w2 + w < w2*h2);
+		}
+	}
+
+	k = 0;
+	printf("will create uv table\n");
+	for(int h = 0; h<h2/2; h++){
+		for(int w = 0; w<w2/2; w++) {
+			table2[h*w2 + 2*w]     = wh + (h + y/2 ) * w1 + x + 2*w; 
+			table2[h*w2 + 2*w + 1] = wh + (h + y/2 ) * w1 + x + 2*w + 1;
+			assert(h*w2 + 2*w + 1 < w2*h2/2);
+		}
+	}
+	printf("after table:k=%d wh_wh/2=%d\n", k, wh+wh/2);
+
+}
+// 通过查找表示实现
+static void blendByTable(char* dst, char* src, int width, int height)
+{
+
+	int wh = width * height;
+	printf("will rotate y\n");
+	//旋转Y
+	for(int i=0;i<wh;i++) {
+		dst[table1[i]] = src[i];
+	}
+
+	printf("will rotate uv\n");
+	for(int i=0;i<wh/2;i++) {
+		dst[table2[i]] = src[wh + i]; 
+	}
+	printf("after rotate uv\n");
+}
+
+int ClOperate::init_blend_table() {
+	cl_int error = CL_SUCCESS;
+	const cl_import_properties_arm import_properties[] =
+	{
+		CL_IMPORT_TYPE_ARM,
+		//CL_IMPORT_TYPE_HOST_ARM,
+		CL_IMPORT_TYPE_DMA_BUF_ARM,
+		0
+	};
+
+	// 初始化表
+	createBlendTable(w1, h1, x, y, w2, h2);
+#if 1
+	// 构造opencl table 内存
+	tableObjects[0] = clImportMemoryARM(context,
+										CL_MEM_READ_ONLY,
+										import_properties,
+										&fd_mb_table1,
+										w2*h2*4,
+										&error);
+	if( error != CL_SUCCESS ) {
+		printf("ERROR to IMPORT table MEM ARM1\n");
+		return -1;
+	}
+	assert(tableObjects[0]!=0);
+	tableObjects[1] = clImportMemoryARM(context,
+										CL_MEM_READ_ONLY,
+										import_properties,
+										&fd_mb_table2,
+										w2*h2*2,
+										&error);
+	if( error != CL_SUCCESS ) {
+		printf("ERROR to IMPORT table MEM ARM2\n");
+		return -1;
+	}
+#endif
+	return 0;
+}
+int ClOperate::deinit_blend_table() {
+	//  释放查找表内存
+	if(tableObjects[0]) {
+		clReleaseMemObject(tableObjects[0]);
+		tableObjects[0] = 0;
+	}
+
+	if(tableObjects[1]) {
+		clReleaseMemObject(tableObjects[1]);
+		tableObjects[1] = 0;
+	}
+
+	delTable();
+
+
+	return 0;
+}
+int ClOperate::blend_1d(MEDIA_BUFFER mb1, MEDIA_BUFFER mb2) {
+    unsigned char *src1     = (unsigned char *)RK_MPI_MB_GetPtr(mb1);
+    unsigned char *src2     = (unsigned char *)RK_MPI_MB_GetPtr(mb2);
+    unsigned char *result   = src1;;
+
+	int fd_mb1 = RK_MPI_MB_GetFD(mb1);
+	int fd_mb2 = RK_MPI_MB_GetFD(mb2);
+
+	// 使用arm drm内存进行zero-copy操作
+	cl_int error = CL_SUCCESS;
+	const cl_import_properties_arm import_properties[] =
+	{
+		CL_IMPORT_TYPE_ARM,
+		//CL_IMPORT_TYPE_HOST_ARM,
+		CL_IMPORT_TYPE_DMA_BUF_ARM,
+		0
+	};
+
+	memObjects[0] = clImportMemoryARM(context,
+										CL_MEM_READ_WRITE,
+										import_properties,
+										&fd_mb1,
+										BIG_SIZE,
+										&error);
+	if( error != CL_SUCCESS ) {
+		printf("ERROR to IMPORT MEM ARM1\n");
+		return -1;
+	}
+	assert(memObjects[0]!=0);
+	memObjects[1] = clImportMemoryARM(context,
+										CL_MEM_READ_WRITE,
+										import_properties,
+										&fd_mb2,
+										LIT_SIZE,
+										&error);
+	if( error != CL_SUCCESS ) {
+		printf("ERROR to IMPORT MEM ARM2\n");
+		return -1;
+	}
+
+	// 合成Y
+	{
+	// Set the kernel arguments (w ,h ,....)
+    errNum  = clSetKernelArg(kernel[0], 0, sizeof(cl_mem), &tableObjects[0]);
+    errNum |= clSetKernelArg(kernel[0], 1, sizeof(cl_mem), &memObjects[0]);
+    errNum |= clSetKernelArg(kernel[0], 2, sizeof(cl_mem), &memObjects[1]);
+    if (errNum != CL_SUCCESS)
+    {
+        std::cerr << "Error setting y kernel arguments." << std::endl;
+        Cleanup(context, commandQueue, program, kernel, memObjects);
+        return 1;
+    }
+	//printf("=================>after  set param\n");
+
+    size_t globalWorkSize[1] = { h2 *w2};
+    size_t localWorkSize[1] = { 200 };
+	size_t dim = 1;
+
+    // Queue the kernel up for execution across the array
+    errNum = clEnqueueNDRangeKernel(commandQueue, kernel[0], dim, NULL,
+                                    globalWorkSize, localWorkSize,
+                                    0, NULL, NULL);
+    if (errNum != CL_SUCCESS)
+    {
+        std::cerr << "Error y queuing kernel for execution." << std::endl;
+        Cleanup(context, commandQueue, program, kernel, memObjects);
+        return 1;
+    }
+
+
+	//clReleaseKernel(kernel[0]);
+	}
+/////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+	if(1)
+	{
+	// 合成UV
+	int offset = w2 * h2;
+     // Set the kernel arguments (w ,h ,....)
+    errNum |= clSetKernelArg(kernel[1], 0, sizeof(cl_mem), &tableObjects[1]);
+    errNum |= clSetKernelArg(kernel[1], 1, sizeof(int), &offset);
+    errNum |= clSetKernelArg(kernel[1], 2, sizeof(cl_mem), &memObjects[0]);
+    errNum |= clSetKernelArg(kernel[1], 3, sizeof(cl_mem), &memObjects[1]);
+    if (errNum != CL_SUCCESS)
+    {
+        std::cerr << "Error setting uv kernel arguments." << std::endl;
+        Cleanup(context, commandQueue, program, kernel, memObjects);
+        return 1;
+    }
+	//printf("=================>after  set param\n");
+
+    size_t globalWorkSize[1] = { w2*h2/2};
+    size_t localWorkSize[1] = { 200 };
+	size_t dim = 1;
+
+    // Queue the kernel up for execution across the array
+    errNum = clEnqueueNDRangeKernel(commandQueue, kernel[1], dim, NULL,
+                                    globalWorkSize, localWorkSize,
+                                    0, NULL, &event);
+                                    //0, NULL, NULL);
+
+	//clFinish(commandQueue);
+    if (errNum != CL_SUCCESS)
+    {
+        std::cerr << "Error uv queuing kernel for execution." << std::endl;
+        Cleanup(context, commandQueue, program, kernel, memObjects);
+        return 1;
+    }
+
+	//printf("=================>after call cl\n");
+
+
+	}
+
+
+	clReleaseMemObject(memObjects[0]);
+	memObjects[0] = 0;
+
+	clReleaseMemObject(memObjects[1]);
+	memObjects[1] = 0;
+
+
+
+	//clFinish(commandQueue);
+	clWaitForEvents(one, &event);
+	clReleaseEvent(event);
+
 
 	return 0;
 }

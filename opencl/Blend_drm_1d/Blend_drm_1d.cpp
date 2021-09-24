@@ -492,7 +492,7 @@ printf("=====>%s:%d\n","buf operate time:", (t_new.tv_sec-t_old.tv_sec)*1000000 
 
 #if 1
     // Create OpenCL kernel y
-    kernel[0] = clCreateKernel(program, "blend_y", NULL);
+    kernel[0] = clCreateKernel(program, "blend_1d_y", NULL);
     if (kernel[0] == NULL)
     {
         std::cerr << "Failed to create kernel[0]" << std::endl;
@@ -501,7 +501,7 @@ printf("=====>%s:%d\n","buf operate time:", (t_new.tv_sec-t_old.tv_sec)*1000000 
 	}
 
 	// Create OpenCL kernel uv
-    kernel[1] = clCreateKernel(program, "blend_uv", NULL);
+    kernel[1] = clCreateKernel(program, "blend_1d_uv", NULL);
     if (kernel[1] == NULL)
     {
         std::cerr << "Failed to create kernel[1]" << std::endl;

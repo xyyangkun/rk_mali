@@ -440,7 +440,7 @@ gettimeofday(&t_old, 0);
     // Queue the kernel up for execution across the array
     errNum = clEnqueueNDRangeKernel(commandQueue, kernel[0], dim, NULL,
                                     globalWorkSize, localWorkSize,
-                                    0, NULL, NULL);
+                                    0, NULL, &event);
     if (errNum != CL_SUCCESS)
     {
         std::cerr << "Error queuing kernel for execution." << std::endl;
@@ -453,7 +453,7 @@ gettimeofday(&t_old, 0);
 	}
 /////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-	//if(0)
+	if(1)
 	{
 	// 合成UV
 	const int w11 = w1/2;

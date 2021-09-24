@@ -30,6 +30,7 @@ static void sigterm_handler(int sig) {
 	quit = true;
 }
 
+// #define USE_BLEND_1D
 
 void *blend_proc(void *param) {
 	// 读文件
@@ -79,16 +80,27 @@ void *blend_proc(void *param) {
 
 
 	// opencl 初始化
+#ifndef USE_BLEND_1D
 	ClOperate cl(1920, 1080, 1280, 720, 20, 20);
 	cl.initcl();
 	cl.initkernel();
-
 	// 循环调用
 	while(!quit) {
 		cl.blend(mb1, mb2);
 		print_fps("blend fps:");	
 	}
-	
+#else
+	ClOperate cl(1920, 1080, 1280, 720, 20, 20, 2);
+	cl.initcl();
+	cl.initkernel();
+	cl.init_blend_table();
+	// 循环调用
+	while(!quit) {
+		cl.blend_1d(mb1, mb2);
+		print_fps("blend_1d fps:");	
+	}
+#endif
+
 
 	out:
 	RK_MPI_MB_ReleaseBuffer(mb1);

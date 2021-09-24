@@ -42,7 +42,7 @@
 class ClOperate
 {
 public:
-ClOperate(int w1, int h1, int w2, int h2, int x, int y);
+ClOperate(int w1, int h1, int w2, int h2, int x, int y, int type = 0);
 ClOperate(int w1, int h1);
 ~ClOperate();
 int initcl();
@@ -50,7 +50,11 @@ int deinitcl();
 int initkernel();
 int deinitkernel();
 
+int init_blend_table();
+int deinit_blend_table();
+
 int blend(MEDIA_BUFFER mb1, MEDIA_BUFFER mb2);
+int blend_1d(MEDIA_BUFFER mb1, MEDIA_BUFFER mb2);
 
 int rotate(MEDIA_BUFFER mb1, MEDIA_BUFFER mb2);
 
@@ -79,6 +83,7 @@ private:
     cl_mem memObjects[2];
     cl_int errNum;
 
+	cl_mem tableObjects[2] ;
 
 };
 #endif//_LIBCL_H_

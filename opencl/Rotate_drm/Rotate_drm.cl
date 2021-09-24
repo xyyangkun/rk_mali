@@ -19,6 +19,12 @@ __kernel void rotate_y(
 
 	//  90度
 	//dst[(w1-w)*h1 + h] = src [w1*h+w];
+#if 0
+	if(h < h1/2 && w < w1/2) {
+	dst[2073600 + w * h1 + 2 * h    ] = src [2073600 + w1 * (h1/2 - h) + 2 * w];
+	dst[2073600 + w * h1 + 2 * h + 1] = src [2073600 + w1 * (h1/2 - h) + 2 * w + 1];
+	}
+#endif
 }
 
 // 这个和 cpu 上实现不同的地方是注意width, height,

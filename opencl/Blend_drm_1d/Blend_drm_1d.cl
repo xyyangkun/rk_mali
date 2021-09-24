@@ -1,5 +1,5 @@
 //#pragma OPENCL EXTENSION cl_arm_printf : enable
-__kernel void blend_y(
+__kernel void blend_1d_y(
 						__global unsigned int *table,
 						__global unsigned char *src1,
 						__global const unsigned char *src2
@@ -10,7 +10,7 @@ __kernel void blend_y(
 	//printf("index=%d table:%d\n", index, table[index]);
 }
 
-__kernel void blend_uv(
+__kernel void blend_1d_uv(
 						__global unsigned int *table,
 						const int offset,
 						__global unsigned char *src1,
