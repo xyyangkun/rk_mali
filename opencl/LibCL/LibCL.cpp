@@ -559,11 +559,13 @@ int ClOperate::rotate(MEDIA_BUFFER mb1, MEDIA_BUFFER mb2) {
 	// 合成UV
 	const unsigned int w11 = w1/2;
 	const unsigned int h11 = h1/2;
+	const int offset = w1*h1;
     // Set the kernel arguments (w ,h ,....)
     errNum  = clSetKernelArg(kernel[1], 0, sizeof(int), &w11);
     errNum |= clSetKernelArg(kernel[1], 1, sizeof(int), &h11);
     errNum |= clSetKernelArg(kernel[1], 2, sizeof(cl_mem), &memObjects[0]);
     errNum |= clSetKernelArg(kernel[1], 3, sizeof(cl_mem), &memObjects[1]);
+    errNum |= clSetKernelArg(kernel[1], 4, sizeof(int), &offset);
     if (errNum != CL_SUCCESS)
     {
         std::cerr << "Error setting kernel arguments." << std::endl;

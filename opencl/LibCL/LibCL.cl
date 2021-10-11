@@ -124,7 +124,8 @@ __kernel void rotate_uv(
 					    const int width,
 						const int height,
 						__global unsigned char *src,
-						__global unsigned char *dst
+						__global unsigned char *dst,
+					    const int offset/* uv 在缓冲区的偏移*/
 						)
 {
     int h = get_global_id(0);
@@ -135,8 +136,8 @@ __kernel void rotate_uv(
 	//dst[w1 * h + 2 * w + 1] = src [w1 * h + 2 * w + 1];
 
 	// 镜像
-	dst[2073600 + w * height*2 + 2 * h    ] = src [2073600 + width*2 * (height - h) + 2 * w];
-	dst[2073600 + w * height*2 + 2 * h + 1] = src [2073600 + width*2 * (height - h) + 2 * w + 1];
+	dst[offset + w * height*2 + 2 * h    ] = src [offset + width*2 * (height - h) + 2 * w];
+	dst[offset + w * height*2 + 2 * h + 1] = src [offset + width*2 * (height - h) + 2 * w + 1];
 
 	// 90度
 	//dst[2073600 + (w1 - w) * h1 + 2 * h    ] = src [2073600 + w1 * h + 2 * w];
