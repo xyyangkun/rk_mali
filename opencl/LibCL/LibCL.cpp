@@ -164,8 +164,10 @@ void ClOperate::Cleanup(cl_context context, cl_command_queue commandQueue,
 #ifndef DRM
     for (int i = 0; i < 2; i++)
     {
-        if (memObjects[i] != 0)
+        if (memObjects[i] != 0){
             clReleaseMemObject(memObjects[i]);
+			memObjects[i] = 0;
+		}
     }
 #endif
     if (commandQueue != 0)
@@ -234,7 +236,9 @@ ClOperate::ClOperate(int w1, int h1)
 
 ClOperate::~ClOperate()
 {
-	deinit_blend_table();
+	if(type == 0) { // blend
+		deinit_blend_table();
+	}
 	deinitcl();
 }
 
