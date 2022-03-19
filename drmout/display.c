@@ -41,7 +41,8 @@
 //#include "rkfacial.h"
 
 #define BUF_COUNT 3
-#define USE_NV12
+//#define USE_NV12
+#define USE_RGB888 
 
 struct display {
     int fmt;
@@ -92,14 +93,27 @@ int display_init(int width, int height)
     g_disp.rga_fmt = RK_FORMAT_YCbCr_420_SP;
 #endif
 #ifdef USE_RGB888
-    g_disp.fmt = DRM_FORMAT_BGR888;
-    g_disp.rga_fmt = RK_FORMAT_RGB_888;
+    //g_disp.fmt = DRM_FORMAT_BGR888;
+    //g_disp.rga_fmt = RK_FORMAT_RGB_888;
+
+    g_disp.fmt = DRM_FORMAT_ARGB8888;
+    g_disp.rga_fmt = RK_FORMAT_BGRA_8888;
 #endif
     g_disp.width = width;
     g_disp.height = height;
-    g_disp.plane_type = DRM_PLANE_TYPE_OVERLAY;
+    //g_disp.plane_type = DRM_PLANE_TYPE_OVERLAY; //yuv
+    g_disp.plane_type = DRM_PLANE_TYPE_PRIMARY;  // rgb
     g_disp.buf_cnt = BUF_COUNT;
     g_disp.color = set_yuv_color(COLOR_R);
+
+	g_disp.x = 0; 
+	g_disp.y = 0; 
+	g_disp.w = 1920;
+	g_disp.h = 1080;
+
+	printf("w=%d, y=%d, w=%d, h=%d, dst_w=%d, dst_h=%d\n",
+			g_disp.x, g_disp.y, g_disp.w, g_disp.h, g_disp.width, g_disp.height);
+
     ret = drm_display_init(&g_disp);
     if (ret)
         return ret;
@@ -165,6 +179,58 @@ void display_commit(void *ptr, int fd, int fmt, int w, int h, int rotation)
     drm_commit(&g_disp, num, ptr, fd, fmt, w, h, rotation);
     num = (num + 1) % BUF_COUNT;
 }
+
+
+void drm_commit1(struct display *disp, int num, void *ptr, int fd, int fmt, int w, int h, int rotation)
+{
+    int ret;
+    rga_info_t src, dst;
+    char *map = disp->buf[num].map;
+    int dst_w = disp->width;
+    int dst_h = disp->height;
+    int dst_fmt = disp->rga_fmt;
+
+    memset(&src, 0, sizeof(rga_info_t));
+    src.fd = -1;
+    src.virAddr = ptr;
+    src.mmuFlag = 1;
+    src.rotation = rotation;
+    rga_set_rect(&src.rect, 0, 0, w, h, w, h, fmt);
+    memset(&dst, 0, sizeof(rga_info_t));
+    dst.fd = -1;
+    dst.virAddr = map;
+    dst.mmuFlag = 1;
+    rga_set_rect(&dst.rect, 0, 0, dst_w, dst_h, dst_w, dst_h, dst_fmt);
+    if (c_RkRgaBlit(&src, &dst, NULL)) {
+        printf("%s: rga fail\n", __func__);
+        return;
+    }
+
+    pthread_mutex_lock(&g_lock);
+	printf("%d %d %d %d\n", g_disp.x, g_disp.y, g_disp.w, g_disp.h);
+    YUV_Rect rect = {g_disp.x, g_disp.y, g_disp.w, g_disp.h};
+    YUV_Color color = g_disp.color;
+    pthread_mutex_unlock(&g_lock);
+	printf("x=%d, y=%d, width=%d height=%d\n", rect.x, rect.y, rect.width, rect.height);
+    if (rect.x || rect.y || rect.width || rect.height){
+        //yuv420_draw_rectangle(map, dst_w, dst_h, rect, color);
+        //argb8888_draw_rectangle(map, dst_w, dst_h, rect, color);
+	}
+	printf("type:%d\n", disp->plane_type);
+    ret = drmCommit(&disp->buf[num], disp->width, disp->height, 0, 0, &disp->dev, disp->plane_type);
+    if (ret) {
+        fprintf(stderr, "display commit error, ret = %d\n", ret);
+    }
+}
+
+void display_commit1(void *ptr, int fd, int fmt, int w, int h, int rotation)
+{
+    static int num = 0;
+
+    drm_commit1(&g_disp, num, ptr, fd, fmt, w, h, rotation);
+    num = (num + 1) % BUF_COUNT;
+}
+
 
 void display_switch(enum display_video_type type)
 {

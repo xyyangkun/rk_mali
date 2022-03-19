@@ -358,3 +358,50 @@ void yuv420_draw_rectangle(void* imgdata,
     yuv420_draw_line(imgdata, width, height, Point[3], Point[2], color);
     yuv420_draw_line(imgdata, width, height, Point[0], Point[3], color);
 }
+
+void argb8888_draw_rectangle(void* imgdata,
+    int width,
+    int height,
+    YUV_Rect rect_rio,
+    YUV_Color color)
+{
+    int RoiWidth = rect_rio.width;
+    int RoiHeight = rect_rio.height;
+    int x = rect_rio.x;
+    int y = rect_rio.y;
+    YUV_Point  Point[4];
+
+    Point[0].x = x;
+    Point[0].y = y;
+    Point[1].x = x + RoiWidth - 2;
+    Point[1].y = y;
+    Point[2].x = x + RoiWidth - 2;
+    Point[2].y = y + RoiHeight - 2;
+    Point[3].x = x;
+    Point[3].y = y + RoiHeight - 2;
+
+
+	// 改变整体透明度，0透明，255不透明
+	unsigned char a = 255;
+
+	unsigned char r = 0;
+	unsigned char g = 0;
+	unsigned char b = 255; 
+
+	printf("create argb data:x:%d,y:%d,width:%d, height:%d\n", x, y, width, height);
+	for(int h=x; h<height; h++)
+	{
+		for(int w=y; w<width; w++)
+		{
+			int offset = w*h*4;
+			unsigned char *p = imgdata + offset;
+			*(p+0) = a;
+			*(p+1) = r;
+			*(p+2) = g;
+			*(p+3) = b;
+		}
+	}
+
+	
+
+}
