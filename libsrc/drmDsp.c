@@ -317,11 +317,13 @@ int init_display_mem(int dispWidth, int dispHeight, int out_type, int buf_type){
 		else {
 			// rgb8888
 		pDrmDsp->bo[0] = create_sp_bo(pDrmDsp->dev, wAlign16, hAlign16,
-				32, 32, DRM_FORMAT_XRGB8888, 0);
+				//32, 32, DRM_FORMAT_XRGB8888, 0);
+				32, 32, DRM_FORMAT_ARGB8888, 0);
 				//32, 24, DRM_FORMAT_RGB888, 0);
 				//32, 32, DRM_FORMAT_XRGB8888, 0);
 		pDrmDsp->bo[1] = create_sp_bo(pDrmDsp->dev, wAlign16, hAlign16,
-				32, 32, DRM_FORMAT_XRGB8888, 0);
+				//32, 32, DRM_FORMAT_XRGB8888, 0);
+				32, 32, DRM_FORMAT_ARGB8888, 0);
 				//32, 24, DRM_FORMAT_RGB888, 0);
 				//32, 32, DRM_FORMAT_XRGB8888, 0);
 		if (!pDrmDsp->bo[0] || !pDrmDsp->bo[1]) {

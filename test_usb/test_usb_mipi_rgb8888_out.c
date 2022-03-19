@@ -73,6 +73,11 @@ static void _video_cb(void *ptr, int buf_type){
 #endif
 }
 
+// 这个程序打开两个图层一个Primary，一个overlay, 
+// 将primary 设置为顶层时，开启alpha,并设置为0, 顶层将透过去
+// 次程序的primary 层的数据只设置了一次
+// initDrmDsp->initialize_screens初始化argb数据
+//
 int main() {
 	printf("ok\n");
 	

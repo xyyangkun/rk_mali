@@ -27,11 +27,31 @@ void draw_rect(struct sp_bo* bo, uint32_t x, uint32_t y, uint32_t width,
   if (ymax > bo->height)
     ymax = bo->height;
 
+  uint8_t tmp = a;
+  uint8_t tmp1 = r;
+  uint8_t tmp2 = g;
+  uint8_t tmp3 = b;
+
+  printf("yk debug x=%d, y=%d w=%d, h=%d\n", x, y, width, height);
+
   for (i = y; i < ymax; i++) {
     uint8_t* row = (uint8_t*)bo->map_addr + i * bo->pitch;
 
     for (j = x; j < xmax; j++) {
       uint8_t* pixel = row + j * 4;
+
+	  //printf("x=%d, y=%d\n", xmax, ymax);
+	  if(i<800 && j <800) 
+	  {
+		  a = 0x00;
+		  r=0;g=0;b=0;
+	  }
+	  else
+	  {
+		  a = tmp;
+		  r=tmp1;g=tmp2;b=tmp3;
+	  }
+
 
       if (bo->format == DRM_FORMAT_ARGB8888 ||
           bo->format == DRM_FORMAT_XRGB8888) {

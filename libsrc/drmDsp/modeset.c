@@ -100,19 +100,20 @@ printf("================>yk debug hdisplay=%d, vdisplay:%d, vrefresh:%d, type:%d
 
     /* XXX: Hardcoding the format here... :| */
     cr->scanout = create_sp_bo(dev, m->hdisplay, m->vdisplay,
-                               24, 32, DRM_FORMAT_XRGB8888, 0);
+                               32, 32, DRM_FORMAT_ARGB8888, 0);
     if (!cr->scanout) {
       printf("failed to create new scanout bo\n");
       continue;
     }
 
-    ret = add_fb_sp_bo(cr->scanout, DRM_FORMAT_XRGB8888);
+    ret = add_fb_sp_bo(cr->scanout, DRM_FORMAT_ARGB8888);
     if (ret) {
       printf("failed to add fb ret=%d\n", ret);
       continue;
     }
 
-    fill_bo(cr->scanout, 0xFF, 0x0, 0x0, 0xFF);
+	// 设置primary 层颜色，和alpha值
+    fill_bo(cr->scanout, 0x00, 0xff, 0xff, 0xff);
 
     ret = drmModeSetCrtc(dev->fd, cr->crtc->crtc_id,
                          cr->scanout->fb_id, 0, 0, &c->connector_id,
