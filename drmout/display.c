@@ -101,8 +101,8 @@ int display_init(int width, int height)
 #endif
     g_disp.width = width;
     g_disp.height = height;
-    //g_disp.plane_type = DRM_PLANE_TYPE_OVERLAY; //yuv
-    g_disp.plane_type = DRM_PLANE_TYPE_PRIMARY;  // rgb
+    g_disp.plane_type = DRM_PLANE_TYPE_OVERLAY; //yuv
+    //g_disp.plane_type = DRM_PLANE_TYPE_PRIMARY;  // rgb
     g_disp.buf_cnt = BUF_COUNT;
     g_disp.color = set_yuv_color(COLOR_R);
 

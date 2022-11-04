@@ -157,10 +157,11 @@ int main() {
         return -1;
     }
 
-	//printf("gbm get back device:%s\n", gbm_device_get_backend_name(gbm));
+	printf("gbm get back device:%s\n", gbm_device_get_backend_name(gbm));
 
 
     eglDisplay = eglGetDisplay(gbm); // not EGL_DEFAULT_DISPLAY !
+	printf("%#X\n", eglDisplay);
     if( eglDisplay == EGL_NO_DISPLAY || eglGetError() != EGL_SUCCESS ) {
         LOGE("getdisplay error !");
         return eglGetError();

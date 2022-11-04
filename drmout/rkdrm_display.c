@@ -124,6 +124,7 @@ void drm_fb_get_bpp_depth(uint32_t format, unsigned int *depth, int *bpp)
         *depth = 30;
         *bpp = 32;
         break;
+        printf("yk debug argb8888\n");
     case DRM_FORMAT_ARGB8888:
     case DRM_FORMAT_ABGR8888:
     case DRM_FORMAT_RGBA8888:
@@ -141,6 +142,7 @@ void drm_fb_get_bpp_depth(uint32_t format, unsigned int *depth, int *bpp)
 
 int drm_format_to_bpp(uint32_t format)
 {
+	printf("yk debug drm_format_to_bpp format:%#X\n", format);
     unsigned int depth;
     int bpp;
 
@@ -182,6 +184,7 @@ int drmGetBuffer(int fd, int width, int height, int format,
     else
         alloc_arg.height = height;
 
+	printf("get bpp:%d, alloc height:%d width:%d\n", bpp, alloc_arg.height, alloc_arg.width);
     ret = drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &alloc_arg);
     if (ret) {
         printf("failed to create dumb buffer: %s\n", strerror(errno));
@@ -391,11 +394,14 @@ drmModeConnectorPtr drmFoundConn(int fd, drmModeResPtr res)
         c = drmModeGetConnector(fd, res->connectors[i]);
         if (!c)
             continue;
+		printf("yk debug connector_type = %d\n", c->connector_type);
         if (c->connector_type == DRM_MODE_CONNECTOR_DSI ||
             c->connector_type == DRM_MODE_CONNECTOR_eDP ||
             c->connector_type == DRM_MODE_CONNECTOR_DPI ||
+            c->connector_type == DRM_MODE_CONNECTOR_HDMIA ||
             c->connector_type == DRM_MODE_CONNECTOR_LVDS) {
             connector = c;
+			printf("yk debug found!!!!\n");
             break;
         }
         drmModeFreeConnector(c);
@@ -458,7 +464,7 @@ static drmModeCrtcPtr drmFoundCrtc(int fd, drmModeResPtr res,
     }
   }
 
-  printf("yk debug crtc_id:%d\n", crtc_id);
+  printf("yk debug crtc_id:%d, count_encoders:%d\n", crtc_id, conn->count_encoders);
 
   /* If no active crtc was found, pick the first possible crtc */
   if (crtc_id == -1) {
@@ -474,6 +480,9 @@ static drmModeCrtcPtr drmFoundCrtc(int fd, drmModeResPtr res,
 
   if (crtc_id == -1)
     return NULL;
+
+
+  printf("yk debug count_crtcs:%d\n", res->count_crtcs);
 
   for (i = 0; i < res->count_crtcs; i++) {
     crtc = drmModeGetCrtc (fd, res->crtcs[i]);
@@ -548,6 +557,11 @@ int drmInit(struct drm_dev *dev)
         ret = -ENODEV;
         goto err_crtc;
     }
+
+	printf("crtc_index:%d connects:%d\n", crtc_index,*( res->connectors));
+	printf("mode:%s, vrefresh:%d, h:%d, v:%d clock:%d\n",
+			crtc->mode.name, crtc->mode.vrefresh, 
+			crtc->mode.hdisplay, crtc->mode.vdisplay, crtc->mode.clock);
 
     plane = drmGetPlaneByType(fd, crtc_index, DRM_PLANE_TYPE_PRIMARY);
     if (!plane) {
@@ -664,7 +678,17 @@ int drmCommit(struct drm_buf *buffer, int width, int height,
     DRM_ATOMIC_ADD_PROP(plane_prop->crtc_h, height);
     //DRM_ATOMIC_ADD_PROP(plane_prop->zpos, plane_zpos);
 
-//    flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
+	printf("crtc_id=%d fb_id=%d\n", crtc->crtc_id, buffer->fb_id);
+	ret = drmModeSetCrtc(dev->drm_fd, crtc->crtc_id, buffer->fb_id, 
+			0, 0, dev->connector, 1, 
+			&crtc->mode
+			);
+	if(ret)
+		fprintf(stderr, "failed to set mode: %s\n", strerror(errno));
+
+	//drmModeDirtyFB(dev->drm_fd, buffer->fb_id, NULL, 0);
+
+    flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
     ret = drmModeAtomicCommit(dev->drm_fd, req, flags, NULL);
     if (ret)
         printf("atomic: couldn't commit new state: %s\n", strerror(errno));
